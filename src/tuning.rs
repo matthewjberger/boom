@@ -92,7 +92,7 @@ pub const DAMAGE_FLASH_TIME: f32 = 0.5;
 pub const LOW_HEALTH_FRACTION: f32 = 0.3;
 
 // Camera / juice
-pub const FOV_BASE_DEGREES: f32 = 90.0;
+pub const FOV_BASE_DEGREES: f32 = 78.0;
 pub const SHAKE_FREQ_X: f32 = 92.0;
 pub const SHAKE_FREQ_Y: f32 = 71.0;
 pub const SHAKE_AMPLITUDE: f32 = 0.09;

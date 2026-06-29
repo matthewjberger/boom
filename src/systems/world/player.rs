@@ -9,7 +9,7 @@ use nightshade::ecs::input::queries::query_active_gamepad;
 use nightshade::ecs::physics::commands::spawn_first_person_player;
 use nightshade::prelude::*;
 
-const CAMERA_BASE_HEIGHT: f32 = 1.3;
+const CAMERA_BASE_HEIGHT: f32 = 1.05;
 const BOB_FREQUENCY: f32 = 9.0;
 const BOB_VERTICAL: f32 = 0.05;
 const BOB_HORIZONTAL: f32 = 0.035;

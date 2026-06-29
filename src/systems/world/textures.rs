@@ -119,11 +119,11 @@ fn register_material(world: &mut World, name: &str, material: Material) {
 }
 
 pub fn floor_material() -> Material {
-    proto_material(FLOOR_TEXTURE, vec3(0.42, 0.40, 0.48), 0.92, 0.04, 12.0)
+    proto_material(FLOOR_TEXTURE, vec3(0.42, 0.40, 0.48), 0.92, 0.04, 6.0)
 }
 
 pub fn wall_material() -> Material {
-    proto_material(WALL_TEXTURE, vec3(0.62, 0.34, 0.34), 0.86, 0.06, 5.0)
+    proto_material(WALL_TEXTURE, vec3(0.62, 0.34, 0.34), 0.86, 0.06, 4.0)
 }
 
 pub fn platform_material() -> Material {
