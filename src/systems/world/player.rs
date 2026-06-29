@@ -245,6 +245,15 @@ pub fn teleport(boomer_world: &BoomerWorld, world: &mut World, position: Vec3) {
         interpolation.current_translation = position;
     }
     mark_local_transform_dirty(world, player);
+
+    if let Some(camera) = boomer_world.resources.player.camera_entity {
+        if let Some(transform) = world.core.get_local_transform_mut(camera) {
+            transform.rotation = nalgebra_glm::quat_identity();
+        }
+        world
+            .core
+            .set_local_transform_dirty(camera, LocalTransformDirty);
+    }
 }
 
 fn axis(positive: bool, negative: bool) -> f32 {

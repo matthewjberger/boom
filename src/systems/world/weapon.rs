@@ -85,15 +85,11 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
     boomer_world.resources.game.shake += stats.shake;
     boomer_world.resources.game.cam_kick += stats.kick;
     boomer_world.resources.game.fov_pop = boomer_world.resources.game.fov_pop.max(stats.fov_pop);
-    audio::play(
-        boomer_world,
-        world,
-        match kind {
-            WeaponKind::Shotgun => audio::SHOTGUN,
-            WeaponKind::Nailgun => audio::NAILGUN,
-        },
-        0.9,
-    );
+    let (sound, sound_volume) = match kind {
+        WeaponKind::Shotgun => (audio::SHOTGUN, 0.9),
+        WeaponKind::Nailgun => (audio::NAILGUN, 0.4),
+    };
+    audio::play(boomer_world, world, sound, sound_volume);
 
     let Some((origin, forward, right, up)) = camera_frame(boomer_world, world) else {
         return;

@@ -149,7 +149,7 @@ pub fn damage(
         audio::play(boomer_world, world, audio::ENEMY_DEATH, 1.0);
         pickups::maybe_drop(boomer_world, world, position);
     } else {
-        audio::play(boomer_world, world, audio::ENEMY_HURT, 0.7);
+        audio::play(boomer_world, world, audio::ENEMY_HURT, 0.4);
     }
 }
 

@@ -6,7 +6,7 @@ use nightshade::ecs::audio::systems::load_sound_from_bytes;
 use nightshade::ecs::world::commands::{EcsCommand, queue_ecs_command};
 use nightshade::prelude::*;
 
-const SOUND_TTL: f32 = 3.0;
+const SOUND_TTL: f32 = 1.6;
 
 pub const SHOTGUN: &str = "boom_shotgun";
 pub const NAILGUN: &str = "boom_nailgun";

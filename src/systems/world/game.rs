@@ -6,7 +6,7 @@ use crate::tuning;
 use nalgebra_glm::vec3;
 use nightshade::prelude::*;
 
-const POST_HIT_IFRAMES: f32 = 0.6;
+const POST_HIT_IFRAMES: f32 = 0.25;
 const DEATH_SHAKE: f32 = 1.2;
 const EXIT_RADIUS: f32 = 2.8;
 const BANNER_TIME: f32 = 2.4;
