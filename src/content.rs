@@ -1,6 +1,8 @@
-//! Hand-authored level definitions. Each level is a distinct layout with its
-//! own geometry, sky, enemy roster, player spawn, and exit gate. The game
-//! advances through them and loops with scaling difficulty.
+//! Hand-authored level definitions. Each level is a distinct *place* — its own
+//! footprint, room/corridor architecture, height structure, spawn, and exit
+//! gate — not a reskin of one arena. Walls (full height) partition space into
+//! rooms and corridors with doorway gaps; platforms make raised galleries and
+//! catwalks reached by pads; the exit sits at the end of a navigable path.
 
 use nightshade::prelude::Atmosphere;
 
@@ -64,7 +66,7 @@ pub type BlockSpec = (f32, f32, f32, f32, f32, f32, BlockKind);
 /// (x, z, [r, g, b])
 pub type BeaconSpec = (f32, f32, [f32; 3]);
 /// (cx, cy, cz, sx, sy, sz, pitch_radians, yaw_radians) — a tilted slab you can
-/// walk up. Keep pitch gentle so the character controller climbs it.
+/// walk up. Keep pitch under ~27 degrees so the controller climbs without sliding.
 pub type RampSpec = (f32, f32, f32, f32, f32, f32, f32, f32);
 
 #[derive(Clone, Copy, Default)]
@@ -77,8 +79,26 @@ pub struct Roster {
     pub sentinels: u32,
 }
 
+pub struct Level {
+    pub name: &'static str,
+    pub atmosphere: Atmosphere,
+    pub fog: [f32; 3],
+    /// Footprint half-extents; the floor and perimeter walls are sized to these,
+    /// so levels are different shapes and sizes, not one square box.
+    pub half_x: f32,
+    pub half_z: f32,
+    pub spawn: [f32; 3],
+    pub exit: [f32; 2],
+    pub blocks: &'static [BlockSpec],
+    pub ramps: &'static [RampSpec],
+    pub beacons: &'static [BeaconSpec],
+    pub spawn_points: &'static [(f32, f32)],
+    pub pads: &'static [(f32, f32)],
+    pub roster: Roster,
+}
+
 /// An owned, mutable level — what the in-game editor builds and what custom
-/// play sessions run from. Mirrors [`Level`] but with growable collections.
+/// play sessions run from.
 #[derive(Clone)]
 pub struct LevelData {
     pub name: String,
@@ -123,20 +143,6 @@ pub fn atmosphere_for(index: u8) -> Atmosphere {
     }
 }
 
-pub struct Level {
-    pub name: &'static str,
-    pub atmosphere: Atmosphere,
-    pub fog: [f32; 3],
-    pub spawn: [f32; 3],
-    pub exit: [f32; 2],
-    pub blocks: &'static [BlockSpec],
-    pub ramps: &'static [RampSpec],
-    pub beacons: &'static [BeaconSpec],
-    pub spawn_points: &'static [(f32, f32)],
-    pub pads: &'static [(f32, f32)],
-    pub roster: Roster,
-}
-
 pub fn count() -> usize {
     LEVELS.len()
 }
@@ -145,264 +151,277 @@ pub fn level(index: usize) -> &'static Level {
     &LEVELS[index % LEVELS.len()]
 }
 
-use BlockKind::{Choke, Cover, Monument, Pillar, Platform, Wall};
+use BlockKind::{Cover, Monument, Pillar, Platform, Wall};
 
+// ============================================================================
+// L0 — FOUNDRY. A wide hall dominated by a central machine block you circulate
+// around (left or right) from the south entry to the north gate. A low roof on
+// the machine is sniper high-ground reached by side pads.
+// ============================================================================
+const L0_BLOCKS: &[BlockSpec] = &[
+    (0.0, 2.0, 0.0, 12.0, 4.0, 7.0, Wall), // central machine, roof at 4
+    (16.0, 2.5, 0.0, 1.6, 5.0, 1.6, Pillar),
+    (-16.0, 2.5, 0.0, 1.6, 5.0, 1.6, Pillar),
+    (13.5, 0.5, 9.0, 3.4, 1.0, 3.0, Cover),
+    (-13.5, 0.5, -9.0, 3.4, 1.0, 3.0, Cover),
+    (13.5, 0.45, -9.0, 3.4, 0.9, 3.0, Cover),
+    (-13.5, 0.45, 9.0, 3.4, 0.9, 3.0, Cover),
+    (0.0, 0.6, 11.5, 4.0, 1.2, 1.4, Cover),
+    (0.0, 0.6, -11.5, 4.0, 1.2, 1.4, Cover),
+];
+const L0_BEACONS: &[BeaconSpec] = &[
+    (10.0, 7.0, [1.6, 0.7, 0.2]),
+    (-10.0, -7.0, [1.6, 0.7, 0.2]),
+    (10.0, -7.0, [0.2, 1.4, 1.7]),
+    (-10.0, 7.0, [0.2, 1.4, 1.7]),
+];
+const L0_SPAWNS: &[(f32, f32)] = &[
+    (16.0, 10.0),
+    (-16.0, 10.0),
+    (16.0, -10.0),
+    (-16.0, -10.0),
+    (10.0, 0.0),
+    (-10.0, 0.0),
+];
+const L0_PADS: &[(f32, f32)] = &[(9.5, 4.5), (-9.5, -4.5)];
+
+// ============================================================================
+// L1 — THE LOCKS. A long, narrow corridor chopped into chambers by full-height
+// bulkheads, each with a doorway that alternates side to side, so you serpentine
+// north toward the gate while the horde funnels through the gaps.
+// ============================================================================
 const L1_BLOCKS: &[BlockSpec] = &[
-    (0.0, 3.5, 0.0, 3.0, 7.0, 3.0, Monument),
-    (9.0, 2.0, 6.0, 1.8, 4.0, 1.8, Pillar),
-    (-8.0, 2.3, 7.5, 1.8, 4.6, 1.8, Pillar),
-    (-10.5, 1.6, -6.0, 1.8, 3.2, 1.8, Pillar),
-    (7.5, 1.6, -9.5, 1.8, 3.2, 1.8, Pillar),
-    (4.0, 0.45, 9.5, 3.4, 0.9, 1.4, Cover),
-    (-4.5, 0.45, -8.5, 3.4, 0.9, 1.4, Cover),
-    // Raised perch with a step up, reachable by jump or the nearby pad.
-    (11.5, 1.1, -4.0, 4.5, 2.2, 4.5, Platform),
-    (8.4, 0.5, -2.0, 2.0, 1.0, 2.0, Platform),
-    (-11.5, 1.4, 2.5, 4.5, 2.8, 4.5, Platform),
-    (-8.4, 0.6, 1.0, 2.0, 1.2, 2.0, Platform),
+    (-3.0, 4.0, 13.0, 14.0, 8.0, 1.0, Wall), // gap east x[4,10]
+    (3.0, 4.0, 5.0, 14.0, 8.0, 1.0, Wall),   // gap west x[-10,-4]
+    (-3.0, 4.0, -3.0, 14.0, 8.0, 1.0, Wall), // gap east
+    (3.0, 4.0, -11.0, 14.0, 8.0, 1.0, Wall), // gap west
+    (-6.0, 4.0, -18.0, 8.0, 8.0, 1.0, Wall), // final wall, center gap x[-2,2]
+    (6.0, 4.0, -18.0, 8.0, 8.0, 1.0, Wall),
+    (-6.0, 0.6, 9.0, 2.4, 1.2, 2.4, Cover),
+    (6.0, 0.6, 1.0, 2.4, 1.2, 2.4, Cover),
+    (-6.0, 0.6, -7.0, 2.4, 1.2, 2.4, Cover),
 ];
 const L1_BEACONS: &[BeaconSpec] = &[
-    (5.0, 5.0, [0.2, 1.5, 1.8]),
-    (-5.0, 5.0, [1.6, 0.3, 1.5]),
-    (5.0, -5.0, [1.7, 0.8, 0.2]),
-    (-5.0, -5.0, [0.3, 1.6, 0.5]),
+    (7.0, 13.0, [0.3, 1.5, 1.6]),
+    (-7.0, 5.0, [1.6, 0.4, 0.4]),
+    (7.0, -3.0, [0.3, 1.5, 1.6]),
+    (-7.0, -11.0, [1.6, 0.4, 0.4]),
 ];
 const L1_SPAWNS: &[(f32, f32)] = &[
-    (0.0, -16.0),
-    (14.0, -8.0),
-    (-14.0, -8.0),
-    (14.0, 8.0),
-    (-14.0, 8.0),
+    (7.0, 9.0),
+    (-7.0, 1.0),
+    (7.0, -7.0),
+    (-7.0, -14.0),
+    (0.0, -20.0),
 ];
-const L1_PADS: &[(f32, f32)] = &[(13.5, -1.0), (-13.5, 5.5)];
+const L1_PADS: &[(f32, f32)] = &[];
 
+// ============================================================================
+// L2 — THE GALLERY. A central pit ringed by a raised balcony walkway. Melee
+// boils in the pit; casters and sentinels hold the balcony. Side pads kick you
+// up to the high ring; the gate sits in a gap in the south balcony.
+// ============================================================================
 const L2_BLOCKS: &[BlockSpec] = &[
-    (5.5, 1.75, 0.0, 1.0, 3.5, 22.0, Wall),
-    (-5.5, 1.75, 0.0, 1.0, 3.5, 22.0, Wall),
-    (11.5, 1.75, 7.0, 7.0, 3.5, 1.0, Wall),
-    (-11.5, 1.75, 7.0, 7.0, 3.5, 1.0, Wall),
-    (11.5, 1.75, -7.0, 7.0, 3.5, 1.0, Wall),
-    (-11.5, 1.75, -7.0, 7.0, 3.5, 1.0, Wall),
-    (0.0, 0.5, 6.0, 2.2, 1.0, 1.0, Choke),
-    (0.0, 0.5, -6.0, 2.2, 1.0, 1.0, Choke),
-    // Central spine you can vault onto to break sightlines down the corridor.
-    (0.0, 1.3, 0.0, 3.0, 2.6, 3.0, Platform),
-    (0.0, 0.5, 2.6, 2.4, 1.0, 1.6, Platform),
+    (0.0, 1.5, 14.0, 30.0, 3.0, 4.0, Platform), // north balcony, top 3
+    (-9.0, 1.5, -14.0, 12.0, 3.0, 4.0, Platform), // south balcony (split for gate gap)
+    (9.0, 1.5, -14.0, 12.0, 3.0, 4.0, Platform),
+    (14.0, 1.5, 0.0, 4.0, 3.0, 24.0, Platform), // east balcony
+    (-14.0, 1.5, 0.0, 4.0, 3.0, 24.0, Platform), // west balcony
+    (0.0, 0.5, 0.0, 4.0, 1.0, 4.0, Cover),      // pit cover
+    (8.0, 0.5, 8.0, 2.0, 1.0, 2.0, Cover),
+    (-8.0, 0.5, -8.0, 2.0, 1.0, 2.0, Cover),
 ];
 const L2_BEACONS: &[BeaconSpec] = &[
-    (0.0, 14.0, [1.7, 0.5, 0.15]),
-    (0.0, -14.0, [1.7, 0.5, 0.15]),
-    (12.0, 0.0, [0.2, 1.4, 1.6]),
-    (-12.0, 0.0, [0.2, 1.4, 1.6]),
+    (0.0, 0.0, [0.4, 0.7, 1.8]),
+    (12.0, 12.0, [1.5, 0.4, 1.3]),
+    (-12.0, -12.0, [1.5, 0.4, 1.3]),
 ];
+// Pit-only (|x|,|z| < 12) so enemies never spawn inside the raised balconies.
 const L2_SPAWNS: &[(f32, f32)] = &[
-    (0.0, 17.0),
-    (0.0, -17.0),
-    (14.0, 11.0),
-    (-14.0, 11.0),
-    (14.0, -11.0),
-    (-14.0, -11.0),
+    (0.0, 10.0),
+    (10.0, 0.0),
+    (-10.0, 0.0),
+    (0.0, -9.0),
+    (8.0, 8.0),
+    (-8.0, -8.0),
 ];
-const L2_PADS: &[(f32, f32)] = &[(0.0, 4.0), (0.0, -4.0)];
+const L2_PADS: &[(f32, f32)] = &[(8.0, 8.0), (-8.0, -8.0)];
 
+// ============================================================================
+// L3 — SPIRE HALL. A tall central tower ringed by ledges at climbing heights,
+// reached only by pads. The fight goes vertical; gargoyles own the air. Gate on
+// the ground at the north edge.
+// ============================================================================
 const L3_BLOCKS: &[BlockSpec] = &[
-    (9.0, 2.5, 0.0, 1.5, 5.0, 1.5, Pillar),
-    (6.4, 2.5, 6.4, 1.5, 5.0, 1.5, Pillar),
-    (0.0, 2.5, 9.0, 1.5, 5.0, 1.5, Pillar),
-    (-6.4, 2.5, 6.4, 1.5, 5.0, 1.5, Pillar),
-    (-9.0, 2.5, 0.0, 1.5, 5.0, 1.5, Pillar),
-    (-6.4, 2.5, -6.4, 1.5, 5.0, 1.5, Pillar),
-    (0.0, 2.5, -9.0, 1.5, 5.0, 1.5, Pillar),
-    (6.4, 2.5, -6.4, 1.5, 5.0, 1.5, Pillar),
-    (0.0, 0.5, 0.0, 2.4, 1.0, 2.4, Cover),
-    // Raised gallery between two pillars: high ground over the colonnade.
-    (13.0, 1.5, 0.0, 4.0, 3.0, 5.0, Platform),
-    (10.0, 0.6, 0.0, 2.0, 1.2, 3.0, Platform),
+    (0.0, 5.0, 0.0, 4.0, 10.0, 4.0, Monument), // tower
+    (6.5, 0.75, 0.0, 4.0, 1.5, 4.0, Platform), // top 1.5
+    (-6.5, 1.5, 0.0, 4.0, 3.0, 4.0, Platform), // top 3.0
+    (0.0, 2.25, 6.5, 4.0, 4.5, 4.0, Platform), // top 4.5
+    (0.0, 1.1, -6.5, 4.0, 2.2, 4.0, Platform), // top 2.2
+    (13.0, 2.5, 13.0, 1.6, 5.0, 1.6, Pillar),
+    (-13.0, 2.5, -13.0, 1.6, 5.0, 1.6, Pillar),
 ];
 const L3_BEACONS: &[BeaconSpec] = &[
-    (0.0, 0.0, [0.3, 0.6, 1.8]),
-    (13.0, 13.0, [1.5, 0.3, 1.4]),
-    (-13.0, -13.0, [1.5, 0.3, 1.4]),
+    (0.0, 0.0, [0.7, 0.4, 1.8]),
+    (11.0, -11.0, [0.2, 1.5, 1.4]),
+    (-11.0, 11.0, [1.6, 0.7, 0.2]),
 ];
 const L3_SPAWNS: &[(f32, f32)] = &[
-    (15.0, 0.0),
-    (-15.0, 0.0),
-    (0.0, 15.0),
-    (0.0, -15.0),
-    (11.0, 11.0),
-    (-11.0, -11.0),
+    (14.0, 14.0),
+    (-14.0, -14.0),
+    (14.0, -14.0),
+    (-14.0, 14.0),
+    (0.0, 14.0),
+    (14.0, 0.0),
 ];
-const L3_PADS: &[(f32, f32)] = &[(15.5, 0.0), (-13.0, 13.0)];
+const L3_PADS: &[(f32, f32)] = &[(6.5, 6.5), (-6.5, -6.5), (0.0, 9.0)];
 
+// ============================================================================
+// L4 — THE WARRENS. A spine corridor with sealed side rooms off it; the keycard
+// is locked away in the west room behind a doorway. Grab it, then run the spine
+// to the north gate.
+// ============================================================================
 const L4_BLOCKS: &[BlockSpec] = &[
-    (11.0, 1.75, 0.0, 7.0, 3.5, 1.0, Wall),
-    (-11.0, 1.75, 0.0, 7.0, 3.5, 1.0, Wall),
-    (0.0, 1.75, 11.0, 1.0, 3.5, 7.0, Wall),
-    (0.0, 1.75, -11.0, 1.0, 3.5, 7.0, Wall),
-    (0.0, 2.0, 0.0, 2.2, 4.0, 2.2, Monument),
-    (12.5, 0.45, 12.5, 1.4, 0.9, 1.4, Choke),
-    (-12.5, 0.45, 12.5, 1.4, 0.9, 1.4, Choke),
-    (12.5, 0.45, -12.5, 1.4, 0.9, 1.4, Choke),
-    (-12.5, 0.45, -12.5, 1.4, 0.9, 1.4, Choke),
-    // Twin elevated platforms flanking the monument.
-    (8.0, 1.4, 0.0, 3.6, 2.8, 6.0, Platform),
-    (-8.0, 1.4, 0.0, 3.6, 2.8, 6.0, Platform),
+    // West room shell: x[-18,-6], z[2,14]
+    (-6.0, 4.0, 4.0, 1.0, 8.0, 4.0, Wall),  // inner wall z[2,6]
+    (-6.0, 4.0, 11.5, 1.0, 8.0, 5.0, Wall), // inner wall z[9,14], gap z[6,9]
+    (-12.0, 4.0, 14.0, 13.0, 8.0, 1.0, Wall), // north of west room
+    // East room shell: x[6,18], z[-14,-2]
+    (6.0, 4.0, -4.0, 1.0, 8.0, 4.0, Wall),
+    (6.0, 4.0, -11.5, 1.0, 8.0, 5.0, Wall), // gap z[-9,-6]
+    (12.0, 4.0, -14.0, 13.0, 8.0, 1.0, Wall),
+    // spine cover
+    (0.0, 0.6, 6.0, 3.0, 1.2, 1.4, Cover),
+    (0.0, 0.6, -6.0, 3.0, 1.2, 1.4, Cover),
+    (-12.0, 0.6, 8.0, 2.0, 1.2, 2.0, Cover), // by the keycard
+    (12.0, 0.6, -8.0, 2.0, 1.2, 2.0, Cover),
 ];
 const L4_BEACONS: &[BeaconSpec] = &[
-    (6.0, 6.0, [1.6, 0.3, 0.3]),
-    (-6.0, 6.0, [1.6, 0.6, 0.2]),
-    (6.0, -6.0, [1.6, 0.6, 0.2]),
-    (-6.0, -6.0, [1.6, 0.3, 0.3]),
+    (-12.0, 8.0, [1.6, 0.85, 0.2]), // lights the keycard room
+    (12.0, -8.0, [0.3, 1.4, 1.6]),
+    (0.0, 0.0, [0.5, 0.5, 0.9]),
 ];
 const L4_SPAWNS: &[(f32, f32)] = &[
-    (16.0, 16.0),
-    (-16.0, 16.0),
-    (16.0, -16.0),
-    (-16.0, -16.0),
-    (16.0, 0.0),
-    (-16.0, 0.0),
+    (0.0, 12.0),
+    (0.0, -12.0),
+    (-12.0, 6.0),
+    (12.0, -6.0),
+    (14.0, 10.0),
+    (-14.0, -10.0),
 ];
-const L4_PADS: &[(f32, f32)] = &[(11.5, 0.0), (-11.5, 0.0)];
+const L4_PADS: &[(f32, f32)] = &[];
 
-// ZIGGURAT — a stepped Doom-style pyramid you climb tier by tier to a perch.
+// ============================================================================
+// L5 — THE CRUCIBLE. The core: a broad arena with two flanking alcoves for
+// cover and pickups, a low cover ring in the middle, and pillars to break the
+// warlord's sightlines. No exit until the floor is clear.
+// ============================================================================
 const L5_BLOCKS: &[BlockSpec] = &[
-    (0.0, 0.5, 0.0, 14.0, 1.0, 14.0, Platform),
-    (0.0, 1.0, 0.0, 10.0, 2.0, 10.0, Platform),
-    (0.0, 1.5, 0.0, 6.0, 3.0, 6.0, Platform),
-    (0.0, 2.0, 0.0, 3.0, 4.0, 3.0, Monument),
-    (15.0, 1.0, 15.0, 2.0, 2.0, 2.0, Pillar),
-    (-15.0, 1.0, -15.0, 2.0, 2.0, 2.0, Pillar),
-];
-const L5_RAMPS: &[RampSpec] = &[
-    (0.0, 0.5, 9.0, 4.0, 0.4, 4.0, 0.30, 0.0),
-    (
-        9.0,
-        0.5,
-        0.0,
-        4.0,
-        0.4,
-        4.0,
-        0.30,
-        std::f32::consts::FRAC_PI_2,
-    ),
+    (15.0, 2.5, 0.0, 1.6, 5.0, 1.6, Pillar),
+    (-15.0, 2.5, 0.0, 1.6, 5.0, 1.6, Pillar),
+    (7.0, 2.5, 9.0, 1.6, 5.0, 1.6, Pillar),
+    (-7.0, 2.5, 9.0, 1.6, 5.0, 1.6, Pillar),
+    (7.0, 2.5, -9.0, 1.6, 5.0, 1.6, Pillar),
+    (-7.0, 2.5, -9.0, 1.6, 5.0, 1.6, Pillar),
+    (0.0, 1.0, 0.0, 5.0, 2.0, 5.0, Platform), // central dais
+    (13.0, 4.0, 13.0, 6.0, 8.0, 1.0, Wall),   // NE alcove walls
+    (16.5, 4.0, 11.0, 1.0, 8.0, 5.0, Wall),
+    (-13.0, 4.0, -13.0, 6.0, 8.0, 1.0, Wall), // SW alcove walls
+    (-16.5, 4.0, -11.0, 1.0, 8.0, 5.0, Wall),
+    (13.0, 0.45, 13.0, 2.0, 0.9, 2.0, Cover),
+    (-13.0, 0.45, -13.0, 2.0, 0.9, 2.0, Cover),
 ];
 const L5_BEACONS: &[BeaconSpec] = &[
-    (0.0, 0.0, [1.7, 1.0, 0.3]),
-    (13.0, 13.0, [0.3, 1.4, 1.6]),
-    (-13.0, -13.0, [1.5, 0.3, 1.2]),
+    (0.0, 0.0, [1.7, 0.3, 0.25]),
+    (13.0, 13.0, [1.6, 0.6, 0.2]),
+    (-13.0, -13.0, [1.6, 0.6, 0.2]),
 ];
 const L5_SPAWNS: &[(f32, f32)] = &[
-    (16.0, 0.0),
-    (-16.0, 0.0),
-    (0.0, 16.0),
-    (0.0, -16.0),
-    (12.0, 12.0),
-    (-12.0, -12.0),
+    (15.0, 12.0),
+    (-15.0, 12.0),
+    (15.0, -12.0),
+    (-15.0, -12.0),
+    (0.0, 14.0),
+    (10.0, 0.0),
+    (-10.0, 0.0),
 ];
-const L5_PADS: &[(f32, f32)] = &[(8.0, 8.0), (-8.0, -8.0)];
-
-// CHASM — a raised perimeter walkway around a sunken pit; ramps and pads link
-// the two heights so the fight flows up and down.
-const L6_BLOCKS: &[BlockSpec] = &[
-    (0.0, 1.25, 13.5, 30.0, 2.5, 5.0, Platform),
-    (0.0, 1.25, -13.5, 30.0, 2.5, 5.0, Platform),
-    (13.5, 1.25, 0.0, 5.0, 2.5, 22.0, Platform),
-    (-13.5, 1.25, 0.0, 5.0, 2.5, 22.0, Platform),
-    (0.0, 0.5, 0.0, 6.0, 1.0, 6.0, Cover),
-];
-const L6_RAMPS: &[RampSpec] = &[
-    (0.0, 0.9, 8.5, 5.0, 0.4, 5.0, 0.42, 0.0),
-    (0.0, 0.9, -8.5, 5.0, 0.4, 5.0, -0.42, 0.0),
-];
-const L6_BEACONS: &[BeaconSpec] = &[
-    (0.0, 0.0, [0.3, 0.7, 1.8]),
-    (13.5, 13.5, [1.6, 0.4, 0.3]),
-    (-13.5, -13.5, [1.6, 0.4, 0.3]),
-];
-const L6_SPAWNS: &[(f32, f32)] = &[
-    (0.0, 16.0),
-    (0.0, -16.0),
-    (16.0, 0.0),
-    (-16.0, 0.0),
-    (0.0, 4.0),
-    (0.0, -4.0),
-];
-const L6_PADS: &[(f32, f32)] = &[(6.0, 0.0), (-6.0, 0.0)];
-
-// SPIRE — a tall central column ringed by staggered ledges; verticality is the
-// whole point and the gargoyles own the air.
-const L7_BLOCKS: &[BlockSpec] = &[
-    (0.0, 4.0, 0.0, 3.0, 8.0, 3.0, Monument),
-    (6.0, 0.75, 0.0, 4.0, 1.5, 4.0, Platform),
-    (-6.0, 1.5, 0.0, 4.0, 3.0, 4.0, Platform),
-    (0.0, 2.25, 6.0, 4.0, 4.5, 4.0, Platform),
-    (0.0, 1.1, -6.0, 4.0, 2.2, 4.0, Platform),
-    (12.0, 1.0, 12.0, 3.0, 2.0, 3.0, Pillar),
-    (-12.0, 1.0, -12.0, 3.0, 2.0, 3.0, Pillar),
-];
-const L7_RAMPS: &[RampSpec] = &[(3.5, 0.6, 0.0, 3.0, 0.4, 4.0, 0.0, 0.0)];
-const L7_BEACONS: &[BeaconSpec] = &[
-    (0.0, 0.0, [0.7, 0.4, 1.8]),
-    (10.0, -10.0, [0.2, 1.5, 1.4]),
-    (-10.0, 10.0, [1.6, 0.7, 0.2]),
-];
-const L7_SPAWNS: &[(f32, f32)] = &[
-    (15.0, 15.0),
-    (-15.0, -15.0),
-    (15.0, -15.0),
-    (-15.0, 15.0),
-    (0.0, 16.0),
-    (16.0, 0.0),
-];
-const L7_PADS: &[(f32, f32)] = &[(6.0, 0.0), (-6.0, 0.0), (0.0, 6.0)];
+const L5_PADS: &[(f32, f32)] = &[(0.0, 0.0)];
 
 const LEVELS: &[Level] = &[
     Level {
-        name: "ARRIVAL",
-        atmosphere: Atmosphere::Nebula,
-        fog: [0.05, 0.02, 0.10],
-        spawn: [0.0, 1.2, 14.0],
-        exit: [0.0, -16.5],
+        name: "FOUNDRY",
+        atmosphere: Atmosphere::Sunset,
+        fog: [0.10, 0.05, 0.02],
+        half_x: 19.0,
+        half_z: 15.0,
+        spawn: [0.0, 1.2, 12.0],
+        exit: [0.0, -12.5],
+        blocks: L0_BLOCKS,
+        ramps: &[],
+        beacons: L0_BEACONS,
+        spawn_points: L0_SPAWNS,
+        pads: L0_PADS,
+        roster: Roster {
+            imps: 7,
+            swarmers: 5,
+            casters: 2,
+            brutes: 0,
+            gargoyles: 0,
+            sentinels: 1,
+        },
+    },
+    Level {
+        name: "THE LOCKS",
+        atmosphere: Atmosphere::Space,
+        fog: [0.02, 0.04, 0.10],
+        half_x: 10.0,
+        half_z: 24.0,
+        spawn: [0.0, 1.2, 21.0],
+        exit: [0.0, -21.5],
         blocks: L1_BLOCKS,
         ramps: &[],
         beacons: L1_BEACONS,
         spawn_points: L1_SPAWNS,
         pads: L1_PADS,
         roster: Roster {
-            imps: 7,
-            swarmers: 4,
-            casters: 1,
-            brutes: 0,
+            imps: 6,
+            swarmers: 7,
+            casters: 3,
+            brutes: 1,
             gargoyles: 0,
-            sentinels: 0,
+            sentinels: 1,
         },
     },
     Level {
-        name: "GAUNTLET",
-        atmosphere: Atmosphere::Sunset,
-        fog: [0.12, 0.04, 0.02],
-        spawn: [0.0, 1.2, 16.0],
-        exit: [0.0, -16.5],
+        name: "THE GALLERY",
+        atmosphere: Atmosphere::Nebula,
+        fog: [0.05, 0.03, 0.10],
+        half_x: 17.0,
+        half_z: 17.0,
+        spawn: [0.0, 1.2, 10.0],
+        exit: [0.0, -15.5],
         blocks: L2_BLOCKS,
         ramps: &[],
         beacons: L2_BEACONS,
         spawn_points: L2_SPAWNS,
         pads: L2_PADS,
         roster: Roster {
-            imps: 6,
-            swarmers: 7,
-            casters: 2,
+            imps: 5,
+            swarmers: 5,
+            casters: 4,
             brutes: 1,
-            gargoyles: 1,
-            sentinels: 1,
+            gargoyles: 2,
+            sentinels: 3,
         },
     },
     Level {
-        name: "COLONNADE",
-        atmosphere: Atmosphere::Space,
-        fog: [0.02, 0.03, 0.08],
-        spawn: [0.0, 1.2, 15.5],
-        exit: [0.0, -16.5],
+        name: "SPIRE HALL",
+        atmosphere: Atmosphere::Nebula,
+        fog: [0.06, 0.03, 0.10],
+        half_x: 17.0,
+        half_z: 17.0,
+        spawn: [0.0, 1.2, 14.0],
+        exit: [0.0, -15.5],
         blocks: L3_BLOCKS,
         ramps: &[],
         beacons: L3_BEACONS,
@@ -411,89 +430,53 @@ const LEVELS: &[Level] = &[
         roster: Roster {
             imps: 4,
             swarmers: 5,
-            casters: 5,
+            casters: 3,
             brutes: 1,
-            gargoyles: 2,
+            gargoyles: 5,
             sentinels: 2,
         },
     },
     Level {
-        name: "CRUCIBLE",
-        atmosphere: Atmosphere::Nebula,
-        fog: [0.10, 0.03, 0.04],
-        spawn: [0.0, 1.2, 16.5],
-        exit: [0.0, -16.5],
+        name: "THE WARRENS",
+        atmosphere: Atmosphere::Space,
+        fog: [0.02, 0.03, 0.08],
+        half_x: 18.0,
+        half_z: 16.0,
+        spawn: [0.0, 1.2, 13.0],
+        exit: [0.0, -13.5],
         blocks: L4_BLOCKS,
         ramps: &[],
         beacons: L4_BEACONS,
         spawn_points: L4_SPAWNS,
         pads: L4_PADS,
         roster: Roster {
+            imps: 6,
+            swarmers: 6,
+            casters: 4,
+            brutes: 1,
+            gargoyles: 1,
+            sentinels: 2,
+        },
+    },
+    Level {
+        name: "THE CRUCIBLE",
+        atmosphere: Atmosphere::Nebula,
+        fog: [0.10, 0.03, 0.04],
+        half_x: 18.0,
+        half_z: 18.0,
+        spawn: [0.0, 1.2, 15.0],
+        exit: [0.0, -15.5],
+        blocks: L5_BLOCKS,
+        ramps: &[],
+        beacons: L5_BEACONS,
+        spawn_points: L5_SPAWNS,
+        pads: L5_PADS,
+        roster: Roster {
             imps: 9,
             swarmers: 8,
             casters: 3,
             brutes: 2,
             gargoyles: 2,
-            sentinels: 2,
-        },
-    },
-    Level {
-        name: "ZIGGURAT",
-        atmosphere: Atmosphere::Sunset,
-        fog: [0.10, 0.05, 0.02],
-        spawn: [0.0, 1.2, 16.0],
-        exit: [0.0, -16.5],
-        blocks: L5_BLOCKS,
-        ramps: L5_RAMPS,
-        beacons: L5_BEACONS,
-        spawn_points: L5_SPAWNS,
-        pads: L5_PADS,
-        roster: Roster {
-            imps: 8,
-            swarmers: 6,
-            casters: 3,
-            brutes: 1,
-            gargoyles: 2,
-            sentinels: 1,
-        },
-    },
-    Level {
-        name: "CHASM",
-        atmosphere: Atmosphere::Space,
-        fog: [0.02, 0.04, 0.10],
-        spawn: [0.0, 3.0, 16.0],
-        exit: [0.0, -16.5],
-        blocks: L6_BLOCKS,
-        ramps: L6_RAMPS,
-        beacons: L6_BEACONS,
-        spawn_points: L6_SPAWNS,
-        pads: L6_PADS,
-        roster: Roster {
-            imps: 6,
-            swarmers: 6,
-            casters: 4,
-            brutes: 1,
-            gargoyles: 3,
-            sentinels: 2,
-        },
-    },
-    Level {
-        name: "SPIRE",
-        atmosphere: Atmosphere::Nebula,
-        fog: [0.06, 0.03, 0.10],
-        spawn: [0.0, 1.2, 16.0],
-        exit: [0.0, -16.5],
-        blocks: L7_BLOCKS,
-        ramps: L7_RAMPS,
-        beacons: L7_BEACONS,
-        spawn_points: L7_SPAWNS,
-        pads: L7_PADS,
-        roster: Roster {
-            imps: 5,
-            swarmers: 5,
-            casters: 3,
-            brutes: 1,
-            gargoyles: 5,
             sentinels: 2,
         },
     },

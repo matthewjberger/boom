@@ -19,7 +19,9 @@ const WALL_THICKNESS: f32 = 1.0;
 
 pub fn build(boomer_world: &mut BoomerWorld, world: &mut World, level: &Level) {
     apply_environment(world, level.atmosphere, level.fog);
-    let mut geometry = spawn_shell(world);
+    boomer_world.resources.level.half_x = level.half_x;
+    boomer_world.resources.level.half_z = level.half_z;
+    let mut geometry = spawn_shell(world, level.half_x, level.half_z);
 
     for (cx, cy, cz, sx, sy, sz, kind) in level.blocks {
         geometry.push(spawn_block(
@@ -70,7 +72,9 @@ pub fn build(boomer_world: &mut BoomerWorld, world: &mut World, level: &Level) {
 /// Build a level from owned editor/custom data (no beacons or ramps).
 pub fn build_dynamic(boomer_world: &mut BoomerWorld, world: &mut World, data: &LevelData) {
     apply_environment(world, atmosphere_for(data.atmosphere_index), data.fog);
-    let mut geometry = spawn_shell(world);
+    boomer_world.resources.level.half_x = tuning::ARENA_HALF;
+    boomer_world.resources.level.half_z = tuning::ARENA_HALF;
+    let mut geometry = spawn_shell(world, tuning::ARENA_HALF, tuning::ARENA_HALF);
 
     for (cx, cy, cz, sx, sy, sz, kind) in &data.blocks {
         geometry.push(spawn_block(
@@ -98,37 +102,38 @@ pub fn apply_environment(world: &mut World, atmosphere: Atmosphere, fog: [f32; 3
     capture_procedural_atmosphere_ibl(world, atmosphere, 0.0);
 }
 
-fn spawn_shell(world: &mut World) -> Vec<Entity> {
+fn spawn_shell(world: &mut World, half_x: f32, half_z: f32) -> Vec<Entity> {
     let mut geometry: Vec<Entity> = Vec::new();
-    let span = tuning::ARENA_HALF * 2.0;
 
     geometry.push(spawn_block(
         world,
         "Floor",
         vec3(0.0, -0.5, 0.0),
-        vec3(span, 1.0, span),
+        vec3(half_x * 2.0, 1.0, half_z * 2.0),
         textures::floor_material(),
     ));
 
-    let edge = tuning::ARENA_HALF + WALL_THICKNESS * 0.5;
-    let wall_length = span + WALL_THICKNESS * 2.0;
+    let edge_x = half_x + WALL_THICKNESS * 0.5;
+    let edge_z = half_z + WALL_THICKNESS * 0.5;
+    let length_x = half_x * 2.0 + WALL_THICKNESS * 2.0;
+    let length_z = half_z * 2.0 + WALL_THICKNESS * 2.0;
     let height_center = WALL_HEIGHT * 0.5;
     let walls = [
         (
-            vec3(0.0, height_center, -edge),
-            vec3(wall_length, WALL_HEIGHT, WALL_THICKNESS),
+            vec3(0.0, height_center, -edge_z),
+            vec3(length_x, WALL_HEIGHT, WALL_THICKNESS),
         ),
         (
-            vec3(0.0, height_center, edge),
-            vec3(wall_length, WALL_HEIGHT, WALL_THICKNESS),
+            vec3(0.0, height_center, edge_z),
+            vec3(length_x, WALL_HEIGHT, WALL_THICKNESS),
         ),
         (
-            vec3(-edge, height_center, 0.0),
-            vec3(WALL_THICKNESS, WALL_HEIGHT, wall_length),
+            vec3(-edge_x, height_center, 0.0),
+            vec3(WALL_THICKNESS, WALL_HEIGHT, length_z),
         ),
         (
-            vec3(edge, height_center, 0.0),
-            vec3(WALL_THICKNESS, WALL_HEIGHT, wall_length),
+            vec3(edge_x, height_center, 0.0),
+            vec3(WALL_THICKNESS, WALL_HEIGHT, length_z),
         ),
     ];
     for (center, size) in walls {

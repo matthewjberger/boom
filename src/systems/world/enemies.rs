@@ -306,7 +306,8 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
     let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
     let player_center = player::position(boomer_world, world);
     let player_ground = vec3(player_center.x, 0.0, player_center.z);
-    let bound = tuning::ARENA_HALF - 1.5;
+    let bound_x = (boomer_world.resources.level.half_x - 1.5).max(2.0);
+    let bound_z = (boomer_world.resources.level.half_z - 1.5).max(2.0);
 
     let mut snapshots: Vec<(Entity, Entity, Enemy)> = boomer_world
         .query_entities(ENEMY | ENGINE_ENTITY)
@@ -465,8 +466,8 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
             }
         }
 
-        enemy.position.x = enemy.position.x.clamp(-bound, bound);
-        enemy.position.z = enemy.position.z.clamp(-bound, bound);
+        enemy.position.x = enemy.position.x.clamp(-bound_x, bound_x);
+        enemy.position.z = enemy.position.z.clamp(-bound_z, bound_z);
         if is_flying(enemy.kind) {
             enemy.position.y = enemy
                 .position
@@ -477,7 +478,7 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
         }
     }
 
-    separate(&mut snapshots, bound);
+    separate(&mut snapshots, bound_x, bound_z);
 
     if melee_damage > 0.0 {
         game::damage_player(boomer_world, world, melee_damage);
@@ -592,7 +593,7 @@ fn avoid(world: &World, position: Vec3, desired: Vec3) -> Vec3 {
     }
 }
 
-fn separate(snapshots: &mut [(Entity, Entity, Enemy)], bound: f32) {
+fn separate(snapshots: &mut [(Entity, Entity, Enemy)], bound_x: f32, bound_z: f32) {
     let count = snapshots.len();
     for first in 0..count {
         if snapshots[first].2.state == EnemyState::Dying {
@@ -613,8 +614,8 @@ fn separate(snapshots: &mut [(Entity, Entity, Enemy)], bound: f32) {
         }
     }
     for (_, _, enemy) in snapshots.iter_mut() {
-        enemy.position.x = enemy.position.x.clamp(-bound, bound);
-        enemy.position.z = enemy.position.z.clamp(-bound, bound);
+        enemy.position.x = enemy.position.x.clamp(-bound_x, bound_x);
+        enemy.position.z = enemy.position.z.clamp(-bound_z, bound_z);
     }
 }
 

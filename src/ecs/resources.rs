@@ -269,6 +269,9 @@ pub struct LevelState {
     pub cycle: u32,
     pub wave: u32,
     pub wave_count: u32,
+    /// Footprint half-extents of the current level (for clamping enemies inside).
+    pub half_x: f32,
+    pub half_z: f32,
     pub pads: Vec<Vec3>,
     pub geometry: Vec<Entity>,
     pub exit_entity: Option<Entity>,
