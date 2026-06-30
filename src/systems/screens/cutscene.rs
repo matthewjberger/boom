@@ -70,15 +70,21 @@ pub fn build(tree: &mut UiTreeBuilder) -> CutsceneHandles {
     }
 }
 
-pub fn update(boomer_world: &BoomerWorld, world: &mut World) {
+const REVEAL_CHARS_PER_SECOND: f32 = 48.0;
+
+pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
     if !matches!(boomer_world.resources.screen.current, Screen::Cutscene) {
         return;
     }
+    let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
+    boomer_world.resources.story.reveal += delta * REVEAL_CHARS_PER_SECOND;
     let handles = boomer_world.resources.ui_handles.cutscene;
     let story = &boomer_world.resources.story;
     if let Some(slide) = story.slides.get(story.slide_index) {
+        let revealed = (story.reveal as usize).min(slide.body.chars().count());
+        let shown: String = slide.body.chars().take(revealed).collect();
         ui_set_text(world, handles.title, &slide.title);
-        ui_set_text(world, handles.body, &slide.body);
+        ui_set_text(world, handles.body, &shown);
     }
 }
 
@@ -87,7 +93,7 @@ pub fn handle_input(boomer_world: &mut BoomerWorld, world: &mut World) {
         return;
     }
     let keyboard = &world.resources.input.keyboard;
-    let advance = keyboard.just_pressed(KeyCode::Space)
+    let pressed = keyboard.just_pressed(KeyCode::Space)
         || keyboard.just_pressed(KeyCode::Enter)
         || world
             .resources
@@ -95,7 +101,19 @@ pub fn handle_input(boomer_world: &mut BoomerWorld, world: &mut World) {
             .gamepad
             .just_pressed_buttons
             .contains(&gilrs::Button::South);
-    if advance {
+    if !pressed {
+        return;
+    }
+    // First press finishes the typewriter; the next advances the cutscene.
+    let story = &boomer_world.resources.story;
+    let full = story
+        .slides
+        .get(story.slide_index)
+        .map(|slide| slide.body.chars().count())
+        .unwrap_or(0);
+    if (story.reveal as usize) < full {
+        boomer_world.resources.story.reveal = full as f32;
+    } else {
         story::advance(boomer_world, world);
     }
 }

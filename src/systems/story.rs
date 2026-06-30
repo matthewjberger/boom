@@ -70,6 +70,7 @@ pub fn advance(boomer_world: &mut BoomerWorld, world: &mut World) {
     let next_index = boomer_world.resources.story.slide_index + 1;
     if next_index < count {
         boomer_world.resources.story.slide_index = next_index;
+        boomer_world.resources.story.reveal = 0.0;
         return;
     }
     match boomer_world.resources.story.after {
@@ -100,6 +101,7 @@ fn show(
 ) {
     boomer_world.resources.story.slides = slides;
     boomer_world.resources.story.slide_index = 0;
+    boomer_world.resources.story.reveal = 0.0;
     boomer_world.resources.story.after = after;
     lifecycle::enter(boomer_world, world, Screen::Cutscene);
 }

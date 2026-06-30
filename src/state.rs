@@ -58,6 +58,6 @@ impl State for Boomer {
 
         systems::world::audio::tick(&mut self.boomer_world, world);
         systems::screens::hud::update(&self.boomer_world, world);
-        systems::screens::cutscene::update(&self.boomer_world, world);
+        systems::screens::cutscene::update(&mut self.boomer_world, world);
     }
 }

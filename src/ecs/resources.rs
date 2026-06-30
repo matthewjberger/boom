@@ -44,6 +44,8 @@ pub struct StoryState {
     pub slides: Vec<StorySlide>,
     pub slide_index: usize,
     pub after: StoryNext,
+    /// Characters of the current slide body revealed so far (typewriter effect).
+    pub reveal: f32,
 }
 
 #[derive(Default)]
