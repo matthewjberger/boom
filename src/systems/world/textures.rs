@@ -26,6 +26,10 @@ pub const PAD_MATERIAL: &str = "cobalt_mat_pad";
 pub const MARKER_PLAYER: &str = "cobalt_mat_marker_player";
 pub const MARKER_ENEMY: &str = "cobalt_mat_marker_enemy";
 pub const MAT_GHOST: &str = "cobalt_mat_ghost";
+pub const MAT_NPC_VILLAGER: &str = "cobalt_mat_npc_villager";
+pub const MAT_NPC_MERCHANT: &str = "cobalt_mat_npc_merchant";
+pub const MAT_NPC_ELDER: &str = "cobalt_mat_npc_elder";
+pub const MAT_NPC_GUARD: &str = "cobalt_mat_npc_guard";
 
 pub const BILLBOARD_MESH: &str = "cobalt_billboard";
 
@@ -113,6 +117,16 @@ pub fn load(world: &mut World) {
         beacon_material(vec3(1.7, 0.3, 0.3), 4.0),
     );
     register_material(world, MAT_GHOST, ghost_material());
+
+    for (texture, name, sprite) in [
+        ("cobalt_npc_villager", MAT_NPC_VILLAGER, art::npc_villager()),
+        ("cobalt_npc_merchant", MAT_NPC_MERCHANT, art::npc_merchant()),
+        ("cobalt_npc_elder", MAT_NPC_ELDER, art::npc_elder()),
+        ("cobalt_npc_guard", MAT_NPC_GUARD, art::npc_guard()),
+    ] {
+        upload_sprite(world, texture, sprite);
+        register_material(world, name, sprite_material(texture));
+    }
 
     register_billboard_mesh(world);
 }

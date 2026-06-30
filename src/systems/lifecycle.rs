@@ -35,6 +35,7 @@ pub fn initialize(cobalt_world: &mut CobaltWorld, world: &mut World) {
     let editor_handles = crate::systems::editor::build_ui(&mut tree);
     let cutscene_handles = cutscene::build(&mut tree);
     let mission_select_handles = mission_select::build(&mut tree);
+    let adventure_handles = crate::adventure::build_ui(&mut tree);
     tree.finish();
     cobalt_world.resources.ui_handles.title = title_handles;
     cobalt_world.resources.ui_handles.level_select = level_select_handles;
@@ -43,6 +44,7 @@ pub fn initialize(cobalt_world: &mut CobaltWorld, world: &mut World) {
     cobalt_world.resources.ui_handles.hud = hud_handles;
     cobalt_world.resources.ui_handles.editor = editor_handles;
     cobalt_world.resources.ui_handles.cutscene = cutscene_handles;
+    cobalt_world.resources.ui_handles.adventure = adventure_handles;
 
     enter(cobalt_world, world, Screen::Title);
 }
@@ -117,6 +119,12 @@ fn screen_config(handles: &UiHandles, screen: Screen) -> ScreenConfig {
             gamepad_nav: false,
             focus: None,
         },
+        Screen::Adventure => ScreenConfig {
+            physics_enabled: true,
+            cursor_locked: true,
+            gamepad_nav: false,
+            focus: None,
+        },
     }
 }
 
@@ -145,5 +153,10 @@ fn apply_visibility(cobalt_world: &CobaltWorld, world: &mut World) {
         world,
         handles.cutscene.root,
         matches!(screen, Screen::Cutscene),
+    );
+    ui_set_visible(
+        world,
+        handles.adventure.root,
+        matches!(screen, Screen::Adventure),
     );
 }

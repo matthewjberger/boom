@@ -445,6 +445,68 @@ pub fn rocket() -> Sprite {
     radial(96, [236, 252, 255], [70, 150, 255])
 }
 
+// A simple humanoid townsperson; colour the robe/accent/hair to make distinct
+// adventure-mode NPCs from one silhouette.
+const PERSON: &[&str] = &[
+    "...kkk...",
+    "..kkkkk..",
+    "..ksssk..",
+    "..sbsbs..",
+    "..ksssk..",
+    "...aaa...",
+    "..raaar..",
+    ".rraaarr.",
+    ".rraaarr.",
+    ".rrrrrrr.",
+    "..rr.rr..",
+    "..dd.dd..",
+];
+
+fn person_color(
+    symbol: char,
+    robe: [u8; 4],
+    accent: [u8; 4],
+    hair: [u8; 4],
+    hurt: bool,
+) -> [u8; 4] {
+    let base = match symbol {
+        'k' => hair,
+        's' => [226, 178, 140, 255],
+        'b' => [40, 26, 22, 255],
+        'a' => accent,
+        'r' => robe,
+        'd' => [42, 32, 26, 255],
+        _ => [0, 0, 0, 0],
+    };
+    brighten(base, hurt)
+}
+
+fn person(robe: [u8; 4], accent: [u8; 4], hair: [u8; 4]) -> Sprite {
+    render_grid(PERSON, |symbol| {
+        person_color(symbol, robe, accent, hair, false)
+    })
+}
+
+pub fn npc_villager() -> Sprite {
+    person([120, 84, 52, 255], [92, 62, 40, 255], [60, 40, 28, 255])
+}
+
+pub fn npc_merchant() -> Sprite {
+    person([96, 52, 140, 255], [232, 196, 72, 255], [40, 30, 28, 255])
+}
+
+pub fn npc_elder() -> Sprite {
+    person(
+        [176, 178, 190, 255],
+        [120, 124, 144, 255],
+        [224, 224, 230, 255],
+    )
+}
+
+pub fn npc_guard() -> Sprite {
+    person([78, 96, 122, 255], [156, 168, 188, 255], [50, 44, 40, 255])
+}
+
 pub fn keycard() -> Sprite {
     let size = 16 * SCALE;
     let mut sprite = solid(size, size);

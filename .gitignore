@@ -1,9 +1,9 @@
 /target
 THIRD_PARTY_LICENSES.html
-boom_best.txt
-boom_campaign.txt
-boom_custom_level.txt
-boom_settings.txt
+cobalt_best.txt
+cobalt_campaign.txt
+cobalt_custom_level.txt
+cobalt_settings.txt
 dist/
 level_*.png
 logs/

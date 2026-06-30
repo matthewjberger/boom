@@ -14,6 +14,7 @@
 //! Architecture follows the nightshade sandbox style: a state shell forwarding
 //! to system functions over a user-side ECS world.
 
+mod adventure;
 mod art;
 mod campaign;
 mod content;

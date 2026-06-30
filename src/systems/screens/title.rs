@@ -16,6 +16,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
 
     let mut story_button = Entity::default();
     let mut play_button = Entity::default();
+    let mut adventure_button = Entity::default();
     let mut level_select_button = Entity::default();
     let mut editor_button = Entity::default();
     let mut quit_button = Entity::default();
@@ -54,13 +55,14 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
             .add_node()
             .window(
                 Rl(vec2(50.0, 100.0)) + Ab(vec2(0.0, -72.0)),
-                Ab(vec2(MENU_BUTTON_SIZE.x, 280.0)),
+                Ab(vec2(MENU_BUTTON_SIZE.x, 348.0)),
                 Anchor::BottomCenter,
             )
             .flow(FlowDirection::Vertical, 8.0, 8.0)
             .entity();
         tree.in_parent(menu_column, |tree| {
             story_button = menu_button::build(tree, "STORY");
+            adventure_button = menu_button::build(tree, "ADVENTURE");
             play_button = menu_button::build(tree, "ARCADE");
             level_select_button = menu_button::build(tree, "SELECT LEVEL");
             editor_button = menu_button::build(tree, "LEVEL EDITOR");
@@ -86,6 +88,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
         root,
         story_button,
         play_button,
+        adventure_button,
         level_select_button,
         editor_button,
         quit_button,
@@ -98,11 +101,13 @@ pub fn handle_input(cobalt_world: &mut CobaltWorld, world: &mut World) {
     }
     let story = cobalt_world.resources.ui_handles.title.story_button;
     let play = cobalt_world.resources.ui_handles.title.play_button;
+    let adventure = cobalt_world.resources.ui_handles.title.adventure_button;
     let level_select = cobalt_world.resources.ui_handles.title.level_select_button;
     let editor = cobalt_world.resources.ui_handles.title.editor_button;
     let quit = cobalt_world.resources.ui_handles.title.quit_button;
     let mut clicked_story = false;
     let mut clicked_play = false;
+    let mut clicked_adventure = false;
     let mut clicked_level_select = false;
     let mut clicked_editor = false;
     let mut clicked_quit = false;
@@ -111,6 +116,8 @@ pub fn handle_input(cobalt_world: &mut CobaltWorld, world: &mut World) {
             clicked_story = true;
         } else if entity == play {
             clicked_play = true;
+        } else if entity == adventure {
+            clicked_adventure = true;
         } else if entity == level_select {
             clicked_level_select = true;
         } else if entity == editor {
@@ -123,6 +130,8 @@ pub fn handle_input(cobalt_world: &mut CobaltWorld, world: &mut World) {
         crate::systems::story::open_select(cobalt_world, world);
     } else if clicked_play {
         lifecycle::enter(cobalt_world, world, Screen::InGame);
+    } else if clicked_adventure {
+        crate::adventure::open(cobalt_world, world);
     } else if clicked_level_select {
         lifecycle::enter(cobalt_world, world, Screen::LevelSelect);
     } else if clicked_editor {

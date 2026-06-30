@@ -1,4 +1,4 @@
-use crate::ecs::{CobaltWorld, Phase, Screen};
+use crate::ecs::{AdvPanel, CobaltWorld, Phase, Screen};
 use crate::systems::lifecycle;
 use crate::systems::world::game;
 use nightshade::prelude::*;
@@ -55,6 +55,13 @@ pub fn handle_global(cobalt_world: &mut CobaltWorld, world: &mut World) {
                 cobalt_world.resources.editor.active = false;
                 game::start_at(cobalt_world, world, 0);
                 lifecycle::enter(cobalt_world, world, Screen::Title);
+            }
+        }
+        Screen::Adventure => {
+            // Esc closes an open menu (handled in the adventure update); with no
+            // menu open it leaves to the title screen.
+            if (escape || start) && cobalt_world.resources.adventure.panel == AdvPanel::None {
+                crate::adventure::leave(cobalt_world, world);
             }
         }
         Screen::Cutscene => {}

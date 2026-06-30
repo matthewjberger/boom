@@ -1,4 +1,4 @@
-use crate::content::{BlockKind, Level, LevelData, atmosphere_for};
+use crate::content::{BlockKind, BlockSpec, Level, LevelData, atmosphere_for};
 use crate::ecs::CobaltWorld;
 use crate::systems::world::textures::{self, MAT_EXIT};
 use crate::tuning;
@@ -104,6 +104,58 @@ pub fn build_dynamic(cobalt_world: &mut CobaltWorld, world: &mut World, data: &L
     let exit_position = vec3(data.exit[0], 0.0, data.exit[1]);
     finalize_level(cobalt_world, world, geometry, pads, exit_position);
     rebuild_navmesh(world, &obstacles, tuning::ARENA_HALF, tuning::ARENA_HALF);
+}
+
+/// Build a free-standing area for adventure mode: floor, perimeter walls, the
+/// given solid blocks, a sun and a soft overhead fill light, with a navmesh baked
+/// over it. Returns every spawned entity for later teardown. No exit gate, pads,
+/// or arcade wave state — the caller owns spawns and accent lighting.
+pub fn build_arena(
+    world: &mut World,
+    blocks: &[BlockSpec],
+    half_x: f32,
+    half_z: f32,
+) -> Vec<Entity> {
+    let mut geometry = spawn_shell(world, half_x, half_z);
+    let mut obstacles: Vec<(Vec3, Vec3)> = Vec::new();
+    for (cx, cy, cz, sx, sy, sz, kind) in blocks {
+        let center = vec3(*cx, *cy, *cz);
+        let size = vec3(*sx, *sy, *sz);
+        geometry.push(spawn_block(
+            world,
+            "Block",
+            center,
+            size,
+            material_for(*kind),
+        ));
+        obstacles.push((center, size));
+    }
+    geometry.push(spawn_sun(world));
+    geometry.push(spawn_lamp(
+        world,
+        vec3(0.0, 11.0, 0.0),
+        vec3(0.7, 0.7, 0.85),
+        46.0,
+        half_x.max(half_z) * 2.2,
+    ));
+    rebuild_navmesh(world, &obstacles, half_x, half_z);
+    geometry
+}
+
+/// A coloured point light at `position` for adventure-mode accent lighting.
+pub fn spawn_accent_light(world: &mut World, position: Vec3, color: Vec3) -> Entity {
+    spawn_lamp(world, position, color, 26.0, 16.0)
+}
+
+/// A stretched, material-textured cube used as a world marker (e.g. a portal
+/// gate). Real geometry rather than a billboard, so it stays visible from every
+/// side instead of vanishing when you walk behind a camera-facing plane.
+pub fn spawn_marker(world: &mut World, position: Vec3, size: Vec3, material: &str) -> Entity {
+    let entity = spawn_mesh_at(world, "Cube", position, size);
+    world
+        .core
+        .set_material_ref(entity, MaterialRef::new(material.to_string()));
+    entity
 }
 
 pub fn apply_environment(world: &mut World, atmosphere: Atmosphere, fog: [f32; 3]) {
@@ -368,7 +420,7 @@ fn spawn_lamp(
     entity
 }
 
-fn spawn_embers(world: &mut World, position: Vec3, color: Vec3) -> Entity {
+pub fn spawn_embers(world: &mut World, position: Vec3, color: Vec3) -> Entity {
     let emitter = ParticleEmitter {
         emitter_type: EmitterType::Sparks,
         shape: EmitterShape::Sphere { radius: 0.5 },

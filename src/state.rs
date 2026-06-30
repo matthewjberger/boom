@@ -139,6 +139,8 @@ impl Brimstone {
             systems::world::fx::tick(&mut self.cobalt_world, world);
         }
 
+        crate::adventure::update(&mut self.cobalt_world, world);
+
         systems::world::audio::tick(&mut self.cobalt_world, world);
         systems::screens::hud::update(&self.cobalt_world, world);
         systems::screens::cutscene::update(&mut self.cobalt_world, world);

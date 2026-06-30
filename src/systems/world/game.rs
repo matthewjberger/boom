@@ -155,6 +155,7 @@ pub fn award(cobalt_world: &mut CobaltWorld, base: u32) {
     {
         let game = &mut cobalt_world.resources.game;
         game.combo += 1;
+        game.kills += 1;
         game.combo_timer = tuning::COMBO_WINDOW;
         game.since_kill = 0.0;
         game.pressure = (game.pressure - 1.0).max(0.0);

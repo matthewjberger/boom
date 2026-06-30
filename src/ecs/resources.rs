@@ -17,6 +17,7 @@ pub enum Screen {
     Editor,
     Cutscene,
     MissionSelect,
+    Adventure,
 }
 
 /// What to do once the player clicks through the current cutscene.
@@ -307,6 +308,8 @@ pub struct GameState {
     pub phase: Phase,
     pub score: u32,
     pub best_score: u32,
+    /// Lifetime enemy kills this session; adventure quests read deltas off it.
+    pub kills: u32,
     pub combo: u32,
     pub combo_timer: f32,
     pub score_flash: f32,
@@ -403,11 +406,152 @@ pub struct AudioPool {
     pub round_robin: std::collections::HashMap<&'static str, usize>,
 }
 
+// ============================================================================
+// Adventure mode: a free-roam RPG layer over the shooter — towns, wandering NPCs,
+// merchants, dialogue, a quest log, an inventory, and combat out in the wilds.
+// ============================================================================
+
+/// A wandering world NPC drawn as a billboard. Its schedule is a simple wander
+/// between random points around `home`, pausing at each.
+#[derive(Clone, Copy)]
+pub struct AdventureNpc {
+    pub kind: usize,
+    pub entity: Entity,
+    pub position: Vec3,
+    pub home: Vec3,
+    pub target: Vec3,
+    pub wait: f32,
+    pub anim: f32,
+    pub shown: u8,
+}
+
+/// A walk-up gateway from one area to another.
+#[derive(Clone)]
+pub struct AdventurePortal {
+    pub position: Vec3,
+    pub target_area: usize,
+    pub label: String,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub enum QuestState {
+    #[default]
+    Available,
+    Active,
+    ReadyToTurnIn,
+    Done,
+}
+
+#[derive(Clone, Copy)]
+pub struct QuestProgress {
+    pub quest: usize,
+    pub state: QuestState,
+    pub count: u32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum AdvPanel {
+    #[default]
+    None,
+    Dialogue,
+    Shop,
+    Inventory,
+    Quests,
+}
+
+/// What the player is currently next to, driving the on-screen `[E]` prompt.
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum Interactable {
+    #[default]
+    None,
+    Npc(usize),
+    Portal(usize),
+}
+
+#[derive(Default)]
+pub struct AdventureState {
+    pub active: bool,
+    pub loaded: bool,
+    pub area: usize,
+    pub gold: u32,
+    /// Inventory as (item-def index, count).
+    pub items: Vec<(usize, u32)>,
+    pub quests: Vec<QuestProgress>,
+    pub npcs: Vec<AdventureNpc>,
+    pub portals: Vec<AdventurePortal>,
+    pub geometry: Vec<Entity>,
+    pub panel: AdvPanel,
+    /// NPC kind currently in dialogue / running a shop.
+    pub dialogue_npc: usize,
+    pub interactable: Interactable,
+    pub banner: f32,
+    pub notice: String,
+    pub notice_timer: f32,
+    pub spawn_point: Vec3,
+    /// Snapshot of `game.kills` last frame, for crediting kill-quest progress.
+    pub last_kills: u32,
+    pub enemy_timer: f32,
+    /// A boss is alive for the current area's boss objective.
+    pub boss_active: bool,
+    /// The intro story beat has played for this run.
+    pub intro_done: bool,
+    pub rng: u64,
+}
+
+impl AdventureState {
+    pub fn item_count(&self, item: usize) -> u32 {
+        self.items
+            .iter()
+            .find(|(id, _)| *id == item)
+            .map(|(_, count)| *count)
+            .unwrap_or(0)
+    }
+
+    pub fn add_item(&mut self, item: usize, amount: u32) {
+        if let Some(slot) = self.items.iter_mut().find(|(id, _)| *id == item) {
+            slot.1 += amount;
+        } else {
+            self.items.push((item, amount));
+        }
+    }
+
+    /// Remove `amount` of `item`; returns false (and changes nothing) if short.
+    pub fn remove_item(&mut self, item: usize, amount: u32) -> bool {
+        let Some(index) = self.items.iter().position(|(id, _)| *id == item) else {
+            return false;
+        };
+        if self.items[index].1 < amount {
+            return false;
+        }
+        self.items[index].1 -= amount;
+        if self.items[index].1 == 0 {
+            self.items.remove(index);
+        }
+        true
+    }
+
+    pub fn quest(&self, quest: usize) -> Option<&QuestProgress> {
+        self.quests.iter().find(|progress| progress.quest == quest)
+    }
+
+    pub fn quest_mut(&mut self, quest: usize) -> Option<&mut QuestProgress> {
+        self.quests
+            .iter_mut()
+            .find(|progress| progress.quest == quest)
+    }
+
+    pub fn notify(&mut self, text: impl Into<String>) {
+        self.notice = text.into();
+        self.notice_timer = 3.0;
+    }
+}
+
 #[derive(Default)]
 pub struct TitleHandles {
     pub root: Entity,
     pub story_button: Entity,
     pub play_button: Entity,
+    pub adventure_button: Entity,
     pub level_select_button: Entity,
     pub editor_button: Entity,
     pub quit_button: Entity,
@@ -473,6 +617,22 @@ pub struct CutsceneHandles {
     pub hint: Entity,
 }
 
+#[derive(Default, Clone, Copy)]
+pub struct AdventureHandles {
+    pub root: Entity,
+    pub area_label: Entity,
+    pub health_label: Entity,
+    pub gold_label: Entity,
+    pub quest_label: Entity,
+    pub prompt_label: Entity,
+    pub notice_label: Entity,
+    pub banner_label: Entity,
+    pub crosshair: Entity,
+    pub panel_root: Entity,
+    pub panel_title: Entity,
+    pub panel_body: Entity,
+}
+
 #[derive(Default)]
 pub struct UiHandles {
     pub title: TitleHandles,
@@ -482,4 +642,5 @@ pub struct UiHandles {
     pub hud: HudHandles,
     pub editor: EditorHandles,
     pub cutscene: CutsceneHandles,
+    pub adventure: AdventureHandles,
 }
