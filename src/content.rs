@@ -166,8 +166,8 @@ const L0_BLOCKS: &[BlockSpec] = &[
     (-13.5, 0.5, -9.0, 3.4, 1.0, 3.0, Cover),
     (13.5, 0.45, -9.0, 3.4, 0.9, 3.0, Cover),
     (-13.5, 0.45, 9.0, 3.4, 0.9, 3.0, Cover),
-    (0.0, 0.6, 11.5, 4.0, 1.2, 1.4, Cover),
-    (0.0, 0.6, -11.5, 4.0, 1.2, 1.4, Cover),
+    (8.0, 0.6, 11.0, 4.0, 1.2, 1.4, Cover), // flanks the entry, clear of spawn
+    (-8.0, 0.6, -11.0, 4.0, 1.2, 1.4, Cover), // flanks the gate
 ];
 const L0_BEACONS: &[BeaconSpec] = &[
     (10.0, 7.0, [1.6, 0.7, 0.2]),
@@ -228,8 +228,8 @@ const L2_BLOCKS: &[BlockSpec] = &[
     (14.0, 1.5, 0.0, 4.0, 3.0, 24.0, Platform), // east balcony
     (-14.0, 1.5, 0.0, 4.0, 3.0, 24.0, Platform), // west balcony
     (0.0, 0.5, 0.0, 4.0, 1.0, 4.0, Cover),      // pit cover
-    (8.0, 0.5, 8.0, 2.0, 1.0, 2.0, Cover),
-    (-8.0, 0.5, -8.0, 2.0, 1.0, 2.0, Cover),
+    (8.0, 0.5, -8.0, 2.0, 1.0, 2.0, Cover),     // clear of pad/spawn corners
+    (-8.0, 0.5, 8.0, 2.0, 1.0, 2.0, Cover),
 ];
 const L2_BEACONS: &[BeaconSpec] = &[
     (0.0, 0.0, [0.4, 0.7, 1.8]),
@@ -345,7 +345,7 @@ const L5_SPAWNS: &[(f32, f32)] = &[
     (10.0, 0.0),
     (-10.0, 0.0),
 ];
-const L5_PADS: &[(f32, f32)] = &[(0.0, 0.0)];
+const L5_PADS: &[(f32, f32)] = &[];
 
 const LEVELS: &[Level] = &[
     Level {

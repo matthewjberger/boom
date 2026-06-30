@@ -319,7 +319,7 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
         .collect();
 
     let mut melee_damage = 0.0;
-    let mut fireballs: Vec<(Vec3, Vec3)> = Vec::new();
+    let mut fireballs: Vec<(Vec3, Vec3, f32)> = Vec::new();
     let mut telegraphs: Vec<(Vec3, Vec3)> = Vec::new();
     let time = world.resources.window.timing.uptime_milliseconds as f32 / 1000.0;
 
@@ -364,7 +364,13 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
                 enemy.windup -= delta;
                 if enemy.windup <= 0.0 {
                     enemy.fire_cooldown = tuning::SENTINEL_FIRE_COOLDOWN;
-                    fireballs.push((center(enemy), player_center));
+                    let damage = tuning::FIREBALL_DAMAGE
+                        * if enemy.elite {
+                            tuning::ELITE_DAMAGE_MULT
+                        } else {
+                            1.0
+                        };
+                    fireballs.push((center(enemy), player_center, damage));
                 }
             } else if enemy.fire_cooldown <= 0.0 {
                 enemy.windup = s.windup_time;
@@ -459,7 +465,13 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
                 enemy.windup -= delta;
                 if enemy.windup <= 0.0 {
                     enemy.fire_cooldown = tuning::CASTER_FIRE_COOLDOWN;
-                    fireballs.push((center(enemy), player_center));
+                    let damage = tuning::FIREBALL_DAMAGE
+                        * if enemy.elite {
+                            tuning::ELITE_DAMAGE_MULT
+                        } else {
+                            1.0
+                        };
+                    fireballs.push((center(enemy), player_center, damage));
                 }
             } else if enemy.fire_cooldown <= 0.0 {
                 enemy.windup = s.windup_time;
@@ -483,8 +495,8 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
     if melee_damage > 0.0 {
         game::damage_player(boomer_world, world, melee_damage);
     }
-    for (origin, target) in fireballs {
-        projectiles::spawn(boomer_world, world, origin, target);
+    for (origin, target, damage) in fireballs {
+        projectiles::spawn(boomer_world, world, origin, target, damage);
         audio::play(boomer_world, world, audio::FIREBALL, 0.32);
     }
     for (position, color) in telegraphs {

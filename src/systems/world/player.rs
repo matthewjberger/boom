@@ -1,4 +1,4 @@
-use crate::ecs::{BoomerWorld, Phase};
+use crate::ecs::BoomerWorld;
 use crate::systems::common::{approach, combo_multiplier};
 use crate::systems::world::audio;
 use crate::systems::world::level::PLAYER_SPAWN;
@@ -60,9 +60,14 @@ pub fn movement(boomer_world: &mut BoomerWorld, world: &mut World) {
         keyboard.is_key_pressed(KeyCode::KeyD),
         keyboard.is_key_pressed(KeyCode::KeyA),
     );
-    let mut jump = keyboard.just_pressed(KeyCode::Space);
-    let mut dash_pressed =
-        keyboard.just_pressed(KeyCode::ControlLeft) || keyboard.just_pressed(KeyCode::ControlRight);
+    let grace = boomer_world.resources.player.spawn_grace > 0;
+    if grace {
+        boomer_world.resources.player.spawn_grace -= 1;
+    }
+    let mut jump = !grace && keyboard.just_pressed(KeyCode::Space);
+    let mut dash_pressed = !grace
+        && (keyboard.just_pressed(KeyCode::ControlLeft)
+            || keyboard.just_pressed(KeyCode::ControlRight));
 
     if let Some(gamepad) = query_active_gamepad(world) {
         let stick_x = gamepad.value(gilrs::Axis::LeftStickX);
@@ -76,19 +81,21 @@ pub fn movement(boomer_world: &mut BoomerWorld, world: &mut World) {
         }
     }
     jump = jump
-        || world
-            .resources
-            .input
-            .gamepad
-            .just_pressed_buttons
-            .contains(&gilrs::Button::South);
+        || (!grace
+            && world
+                .resources
+                .input
+                .gamepad
+                .just_pressed_buttons
+                .contains(&gilrs::Button::South));
     dash_pressed = dash_pressed
-        || world
-            .resources
-            .input
-            .gamepad
-            .just_pressed_buttons
-            .contains(&gilrs::Button::East);
+        || (!grace
+            && world
+                .resources
+                .input
+                .gamepad
+                .just_pressed_buttons
+                .contains(&gilrs::Button::East));
 
     let (forward, right) = camera_basis(boomer_world, world);
     let mut wishdir = forward * forward_input + right * strafe_input;
@@ -373,8 +380,7 @@ pub fn apply_camera_feel(boomer_world: &mut BoomerWorld, world: &mut World) {
         return;
     };
 
-    let active = matches!(boomer_world.resources.game.phase, Phase::Playing)
-        && boomer_world.resources.game.hitstop <= 0.0;
+    let active = boomer_world.resources.player.sim_active;
     let wall_side = boomer_world.resources.player.wall_run_side;
 
     let game = &mut boomer_world.resources.game;

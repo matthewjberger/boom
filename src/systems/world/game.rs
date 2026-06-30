@@ -467,6 +467,7 @@ fn reset_core(boomer_world: &mut BoomerWorld) {
     boomer_world.resources.player.dash_timer = 0.0;
     boomer_world.resources.player.dash_cooldown = 0.0;
     boomer_world.resources.player.iframes = 0.0;
+    boomer_world.resources.player.spawn_grace = 3;
     boomer_world.resources.player.wall_run_side = 0;
     boomer_world.resources.player.wall_run_timer = 0.0;
     boomer_world.resources.player.wall_run_cooldown = 0.0;

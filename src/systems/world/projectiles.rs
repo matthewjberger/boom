@@ -15,9 +15,16 @@ struct Blast {
     splash_radius: f32,
     direct: Option<Entity>,
     hit_player: bool,
+    damage: f32,
 }
 
-pub fn spawn(boomer_world: &mut BoomerWorld, world: &mut World, origin: Vec3, target: Vec3) {
+pub fn spawn(
+    boomer_world: &mut BoomerWorld,
+    world: &mut World,
+    origin: Vec3,
+    target: Vec3,
+    damage: f32,
+) {
     let mut direction = target - origin;
     if direction.norm() < 1e-3 {
         direction = vec3(0.0, 0.0, 1.0);
@@ -34,7 +41,7 @@ pub fn spawn(boomer_world: &mut BoomerWorld, world: &mut World, origin: Vec3, ta
         position: origin,
         velocity,
         lifetime: tuning::FIREBALL_LIFETIME,
-        damage: tuning::FIREBALL_DAMAGE,
+        damage,
         hostile: true,
         splash_radius: 0.0,
     });
@@ -103,6 +110,7 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
             splash_radius: item.splash_radius,
             direct,
             hit_player,
+            damage: item.damage,
         };
 
         if item.lifetime <= 0.0 {
@@ -151,7 +159,7 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
         if blast.hostile {
             fx::hit(boomer_world, world, blast.position, vec3(1.0, 0.5, 0.2));
             if blast.hit_player {
-                game::damage_player(boomer_world, world, tuning::FIREBALL_DAMAGE);
+                game::damage_player(boomer_world, world, blast.damage);
             }
         } else {
             explode(boomer_world, world, &blast);

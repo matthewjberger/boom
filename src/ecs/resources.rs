@@ -127,6 +127,9 @@ pub struct PlayerState {
     pub dash_cooldown: f32,
     pub dash_dir: Vec3,
     pub iframes: f32,
+    /// Frames to swallow movement input after a (re)spawn, so the key that
+    /// dismissed the briefing cutscene isn't also read as a jump.
+    pub spawn_grace: u32,
     /// Wallrun state: which side the wall is on (-1 left, 1 right, 0 none), how
     /// long the run can last, the cooldown after it ends, the wall normal, and
     /// the lerped camera roll currently baked into the view.
@@ -135,6 +138,10 @@ pub struct PlayerState {
     pub wall_run_cooldown: f32,
     pub wall_run_normal: Vec3,
     pub wall_run_tilt: f32,
+    /// True on frames the sim actually steps (playing and not frozen by
+    /// hitstop). The wallrun camera-roll strip (pre_look) and bake
+    /// (apply_camera_feel) both key off this single flag so they never desync.
+    pub sim_active: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

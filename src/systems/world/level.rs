@@ -14,7 +14,9 @@ use nightshade::prelude::*;
 
 pub const PLAYER_SPAWN: Vec3 = Vec3::new(0.0, 1.2, 14.0);
 
-const WALL_HEIGHT: f32 = 8.0;
+// Tall enough that the player can't escape by stacking a pad launch (~5m) onto
+// a pillar top and rocket-jumping (~6.25m) over the perimeter.
+const WALL_HEIGHT: f32 = 12.0;
 const WALL_THICKNESS: f32 = 1.0;
 
 pub fn build(boomer_world: &mut BoomerWorld, world: &mut World, level: &Level) {
