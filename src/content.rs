@@ -74,6 +74,7 @@ pub struct Roster {
     pub casters: u32,
     pub brutes: u32,
     pub gargoyles: u32,
+    pub sentinels: u32,
 }
 
 /// An owned, mutable level — what the in-game editor builds and what custom
@@ -108,6 +109,7 @@ impl Default for LevelData {
                 casters: 2,
                 brutes: 0,
                 gargoyles: 1,
+                sentinels: 0,
             },
         }
     }
@@ -372,6 +374,7 @@ const LEVELS: &[Level] = &[
             casters: 1,
             brutes: 0,
             gargoyles: 0,
+            sentinels: 0,
         },
     },
     Level {
@@ -391,6 +394,7 @@ const LEVELS: &[Level] = &[
             casters: 2,
             brutes: 1,
             gargoyles: 1,
+            sentinels: 1,
         },
     },
     Level {
@@ -410,6 +414,7 @@ const LEVELS: &[Level] = &[
             casters: 5,
             brutes: 1,
             gargoyles: 2,
+            sentinels: 2,
         },
     },
     Level {
@@ -429,6 +434,7 @@ const LEVELS: &[Level] = &[
             casters: 3,
             brutes: 2,
             gargoyles: 2,
+            sentinels: 2,
         },
     },
     Level {
@@ -448,6 +454,7 @@ const LEVELS: &[Level] = &[
             casters: 3,
             brutes: 1,
             gargoyles: 2,
+            sentinels: 1,
         },
     },
     Level {
@@ -467,6 +474,7 @@ const LEVELS: &[Level] = &[
             casters: 4,
             brutes: 1,
             gargoyles: 3,
+            sentinels: 2,
         },
     },
     Level {
@@ -486,6 +494,7 @@ const LEVELS: &[Level] = &[
             casters: 3,
             brutes: 1,
             gargoyles: 5,
+            sentinels: 2,
         },
     },
 ];

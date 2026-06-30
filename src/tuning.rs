@@ -164,6 +164,17 @@ pub const GARGOYLE_HOVER: f32 = 3.2;
 pub const GARGOYLE_ALT_MIN: f32 = 0.6;
 pub const GARGOYLE_ALT_MAX: f32 = 6.5;
 
+// Sentinel (flying ranged: hovers high and lobs fireballs)
+pub const SENTINEL_HEALTH: f32 = 18.0;
+pub const SENTINEL_SPEED: f32 = 3.6;
+pub const SENTINEL_PREFERRED_RANGE: f32 = 12.0;
+pub const SENTINEL_FIRE_COOLDOWN: f32 = 2.2;
+pub const SENTINEL_WINDUP: f32 = 0.4;
+pub const SENTINEL_SCORE: u32 = 160;
+pub const SENTINEL_WIDTH: f32 = 1.5;
+pub const SENTINEL_HEIGHT: f32 = 1.5;
+pub const SENTINEL_HOVER: f32 = 3.4;
+
 // Enemy animation
 pub const ANIM_FPS: f32 = 7.0;
 

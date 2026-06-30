@@ -14,6 +14,8 @@ pub enum EnemyKind {
     Brute,
     /// Winged flyer. Hovers above the fray, then dive-bombs from the air.
     Gargoyle,
+    /// Floating eye. Hovers high out of reach and lobs fireballs down at you.
+    Sentinel,
 }
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]

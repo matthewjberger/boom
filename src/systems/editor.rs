@@ -572,12 +572,13 @@ fn save_to_disk(data: &LevelData) {
     ));
     out.push_str(&format!("EXIT {} {}\n", data.exit[0], data.exit[1]));
     out.push_str(&format!(
-        "ROSTER {} {} {} {} {}\n",
+        "ROSTER {} {} {} {} {} {}\n",
         data.roster.imps,
         data.roster.swarmers,
         data.roster.casters,
         data.roster.brutes,
-        data.roster.gargoyles
+        data.roster.gargoyles,
+        data.roster.sentinels
     ));
     for block in &data.blocks {
         out.push_str(&format!(
@@ -641,13 +642,14 @@ fn load_from_disk() -> Option<LevelData> {
                     .skip(1)
                     .filter_map(|value| value.parse().ok())
                     .collect();
-                if nums.len() == 5 {
+                if nums.len() >= 5 {
                     data.roster = content::Roster {
                         imps: nums[0],
                         swarmers: nums[1],
                         casters: nums[2],
                         brutes: nums[3],
                         gargoyles: nums[4],
+                        sentinels: nums.get(5).copied().unwrap_or(0),
                     };
                 }
             }

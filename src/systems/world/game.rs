@@ -54,20 +54,8 @@ pub fn load_level(boomer_world: &mut BoomerWorld, world: &mut World, absolute_in
 
     let cycle = boomer_world.resources.level.cycle;
     let scale = 1.0 + cycle as f32 * 0.5;
-    let imps = (definition.roster.imps as f32 * scale).round() as u32;
-    let swarmers = (definition.roster.swarmers as f32 * scale).round() as u32;
-    let casters = (definition.roster.casters as f32 * scale).round() as u32;
-    let brutes = (definition.roster.brutes as f32 * scale).round() as u32;
-    let gargoyles = (definition.roster.gargoyles as f32 * scale).round() as u32;
-    let mut waves = build_waves(
-        boomer_world,
-        imps,
-        swarmers,
-        casters,
-        brutes,
-        gargoyles,
-        cycle,
-    );
+    let roster = scale_roster(definition.roster, scale);
+    let mut waves = build_waves(boomer_world, roster, cycle);
 
     let first = if waves.is_empty() {
         Vec::new()
@@ -119,16 +107,7 @@ pub fn start_custom(boomer_world: &mut BoomerWorld, world: &mut World) {
     let spawn = vec3(data.spawn[0], data.spawn[1], data.spawn[2]);
     player::teleport(boomer_world, world, spawn);
 
-    let roster = data.roster;
-    let mut waves = build_waves(
-        boomer_world,
-        roster.imps,
-        roster.swarmers,
-        roster.casters,
-        roster.brutes,
-        roster.gargoyles,
-        0,
-    );
+    let mut waves = build_waves(boomer_world, data.roster, 0);
     let first = if waves.is_empty() {
         Vec::new()
     } else {
@@ -171,16 +150,7 @@ pub fn start_mission(boomer_world: &mut BoomerWorld, world: &mut World, index: u
     );
     player::teleport(boomer_world, world, spawn);
 
-    let roster = definition.roster;
-    let mut waves = build_waves(
-        boomer_world,
-        roster.imps,
-        roster.swarmers,
-        roster.casters,
-        roster.brutes,
-        roster.gargoyles,
-        0,
-    );
+    let mut waves = build_waves(boomer_world, definition.roster, 0);
     if mission.objective == Objective::Boss {
         if let Some(last) = waves.last_mut() {
             last.push((EnemyKind::Brute, true, true));
@@ -425,41 +395,46 @@ fn elite_fraction(cycle: u32) -> f32 {
 
 /// Split the level roster into escalating waves. Fodder spreads across waves
 /// for a swelling cadence; brutes anchor the final wave as a mini-boss cap.
+/// Scale a level's base roster up by the endless-mode cycle multiplier.
+fn scale_roster(roster: content::Roster, scale: f32) -> content::Roster {
+    let bump = |count: u32| (count as f32 * scale).round() as u32;
+    content::Roster {
+        imps: bump(roster.imps),
+        swarmers: bump(roster.swarmers),
+        casters: bump(roster.casters),
+        brutes: bump(roster.brutes),
+        gargoyles: bump(roster.gargoyles),
+        sentinels: bump(roster.sentinels),
+    }
+}
+
 fn build_waves(
     boomer_world: &mut BoomerWorld,
-    imps: u32,
-    swarmers: u32,
-    casters: u32,
-    brutes: u32,
-    gargoyles: u32,
+    roster: content::Roster,
     cycle: u32,
 ) -> Vec<Vec<SpawnEntry>> {
     let fraction = elite_fraction(cycle);
     let count = tuning::WAVES_PER_LEVEL.max(1);
     let mut waves: Vec<Vec<SpawnEntry>> = (0..count).map(|_| Vec::new()).collect();
     let mut cursor = 0usize;
+    let spread: [(EnemyKind, u32, bool); 5] = [
+        (EnemyKind::Imp, roster.imps, true),
+        (EnemyKind::Swarmer, roster.swarmers, false),
+        (EnemyKind::Caster, roster.casters, true),
+        (EnemyKind::Gargoyle, roster.gargoyles, true),
+        (EnemyKind::Sentinel, roster.sentinels, true),
+    ];
+    for (kind, amount, can_elite) in spread {
+        for _ in 0..amount {
+            let elite =
+                can_elite && next_random(&mut boomer_world.resources.game.random_state) < fraction;
+            waves[cursor % count].push((kind, elite, false));
+            cursor += 1;
+        }
+    }
 
-    for _ in 0..imps {
-        let elite = next_random(&mut boomer_world.resources.game.random_state) < fraction;
-        waves[cursor % count].push((EnemyKind::Imp, elite, false));
-        cursor += 1;
-    }
-    for _ in 0..swarmers {
-        waves[cursor % count].push((EnemyKind::Swarmer, false, false));
-        cursor += 1;
-    }
-    for _ in 0..casters {
-        let elite = next_random(&mut boomer_world.resources.game.random_state) < fraction;
-        waves[cursor % count].push((EnemyKind::Caster, elite, false));
-        cursor += 1;
-    }
-    for _ in 0..gargoyles {
-        let elite = next_random(&mut boomer_world.resources.game.random_state) < fraction;
-        waves[cursor % count].push((EnemyKind::Gargoyle, elite, false));
-        cursor += 1;
-    }
     let last = count - 1;
-    for _ in 0..brutes {
+    for _ in 0..roster.brutes {
         let elite = next_random(&mut boomer_world.resources.game.random_state) < fraction;
         waves[last].push((EnemyKind::Brute, elite, false));
     }

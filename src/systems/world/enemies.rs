@@ -104,6 +104,21 @@ fn stats(kind: EnemyKind) -> Stats {
             key: "gargoyle",
             color: vec3(0.55, 0.55, 1.0),
         },
+        EnemyKind::Sentinel => Stats {
+            health: tuning::SENTINEL_HEALTH,
+            speed: tuning::SENTINEL_SPEED,
+            width: tuning::SENTINEL_WIDTH,
+            height: tuning::SENTINEL_HEIGHT,
+            attack_range: 0.0,
+            attack_damage: 0.0,
+            attack_cooldown: 0.0,
+            windup_time: tuning::SENTINEL_WINDUP,
+            lunge_speed: 0.0,
+            lunge_reach: 0.0,
+            score: tuning::SENTINEL_SCORE,
+            key: "sentinel",
+            color: vec3(0.3, 0.9, 1.0),
+        },
     }
 }
 
@@ -112,7 +127,12 @@ fn is_melee(kind: EnemyKind) -> bool {
 }
 
 fn is_flying(kind: EnemyKind) -> bool {
-    matches!(kind, EnemyKind::Gargoyle)
+    matches!(kind, EnemyKind::Gargoyle | EnemyKind::Sentinel)
+}
+
+/// A flyer that lobs fireballs rather than dive-bombing.
+fn is_flying_ranged(kind: EnemyKind) -> bool {
+    matches!(kind, EnemyKind::Sentinel)
 }
 
 /// Resolve the registered material name for an enemy's current visual state.
@@ -152,7 +172,11 @@ pub fn spawn(
     let s = stats(kind);
     let mut spawn_position = position;
     if is_flying(kind) {
-        spawn_position.y = tuning::GARGOYLE_HOVER;
+        spawn_position.y = if matches!(kind, EnemyKind::Sentinel) {
+            tuning::SENTINEL_HOVER
+        } else {
+            tuning::GARGOYLE_HOVER
+        };
     }
     let idle_material = enemy_material(s.key, elite, false, 0);
     let engine = billboard::spawn(
@@ -243,6 +267,7 @@ pub fn damage(
             EnemyKind::Imp => 90,
             EnemyKind::Caster => 110,
             EnemyKind::Gargoyle => 100,
+            EnemyKind::Sentinel => 90,
             EnemyKind::Brute => 150,
         };
         let count = if boss { 320 } else { base_count };
@@ -318,7 +343,31 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
             vec3(0.0, 0.0, 1.0)
         };
 
-        if is_flying(enemy.kind) {
+        if is_flying_ranged(enemy.kind) {
+            let target_alt = tuning::SENTINEL_HOVER + (time * 1.8 + enemy.position.x).sin() * 0.4;
+            enemy.position.y += (target_alt - enemy.position.y) * (3.0 * delta).min(1.0);
+            enemy.state = EnemyState::Chase;
+            let preferred = tuning::SENTINEL_PREFERRED_RANGE;
+            let move_dir = if distance > preferred + 1.5 {
+                direction
+            } else if distance < preferred - 1.5 {
+                -direction
+            } else {
+                vec3(direction.z, 0.0, -direction.x) * enemy.strafe_dir
+            };
+            let steer = avoid(world, enemy.position, move_dir);
+            enemy.position += steer * s.speed * delta;
+
+            if enemy.windup > 0.0 {
+                enemy.windup -= delta;
+                if enemy.windup <= 0.0 {
+                    enemy.fire_cooldown = tuning::SENTINEL_FIRE_COOLDOWN;
+                    fireballs.push((center(enemy), player_center));
+                }
+            } else if enemy.fire_cooldown <= 0.0 {
+                enemy.windup = s.windup_time;
+            }
+        } else if is_flying(enemy.kind) {
             let center_offset = s.height * 0.5;
             let to_player_3d = player_center - (enemy.position + vec3(0.0, center_offset, 0.0));
             let dist3 = to_player_3d.norm();

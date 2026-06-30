@@ -58,6 +58,19 @@ const GARGOYLE: &[&str] = &[
     "...dd.dd...",
 ];
 
+const SENTINEL: &[&str] = &[
+    "...ooooo...",
+    "..ottttto..",
+    ".ottttttto.",
+    "ottttttttto",
+    "ottteeettto",
+    "ottteeettto",
+    "ottttttttto",
+    ".ottttttto.",
+    "..ottttto..",
+    "...ooooo...",
+];
+
 const CASTER: &[&str] = &[
     "....oooo....",
     "...orrrro...",
@@ -180,6 +193,24 @@ pub fn gargoyle_idle() -> Sprite {
 
 pub fn gargoyle_hurt() -> Sprite {
     render_grid(GARGOYLE, |symbol| gargoyle_color(symbol, true))
+}
+
+fn sentinel_color(symbol: char, hurt: bool) -> [u8; 4] {
+    let base = match symbol {
+        'o' => [10, 28, 32, 255],
+        't' => [40, 150, 160, 255],
+        'e' => [180, 255, 255, 255],
+        _ => [0, 0, 0, 0],
+    };
+    brighten(base, hurt)
+}
+
+pub fn sentinel_idle() -> Sprite {
+    render_grid(SENTINEL, |symbol| sentinel_color(symbol, false))
+}
+
+pub fn sentinel_hurt() -> Sprite {
+    render_grid(SENTINEL, |symbol| sentinel_color(symbol, true))
 }
 
 fn caster_color(symbol: char, hurt: bool) -> [u8; 4] {

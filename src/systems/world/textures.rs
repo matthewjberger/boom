@@ -70,6 +70,12 @@ pub fn load(world: &mut World) {
         art::gargoyle_idle(),
         art::gargoyle_hurt(),
     );
+    register_animated(
+        world,
+        "sentinel",
+        art::sentinel_idle(),
+        art::sentinel_hurt(),
+    );
 
     upload_sprite(world, "boom_fireball", art::fireball());
     upload_sprite(world, "boom_rocket", art::rocket());
