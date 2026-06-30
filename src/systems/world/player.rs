@@ -1,9 +1,9 @@
 use crate::ecs::BoomerWorld;
-use crate::systems::common::approach;
+use crate::systems::common::{approach, combo_multiplier};
 use crate::systems::world::audio;
 use crate::systems::world::level::PLAYER_SPAWN;
 use crate::tuning;
-use nalgebra_glm::{Vec3, vec3};
+use nalgebra_glm::{Vec3, dot, vec3};
 use nightshade::ecs::camera::components::{PerspectiveCamera, Projection};
 use nightshade::ecs::input::queries::query_active_gamepad;
 use nightshade::ecs::physics::commands::spawn_first_person_player;
@@ -19,7 +19,7 @@ pub fn spawn(boomer_world: &mut BoomerWorld, world: &mut World) {
     let (player, camera) = spawn_first_person_player(world, PLAYER_SPAWN);
     if let Some(controller) = world.core.get_character_controller_mut(player) {
         controller.engine_input_enabled = false;
-        controller.max_speed = tuning::MOVE_SPEED;
+        controller.max_speed = tuning::MAX_GROUND_SPEED;
         controller.acceleration = 0.0;
         controller.jump_impulse = tuning::JUMP_IMPULSE;
         controller.friction_rate = 0.0;
@@ -58,8 +58,6 @@ pub fn movement(boomer_world: &mut BoomerWorld, world: &mut World) {
         keyboard.is_key_pressed(KeyCode::KeyA),
     );
     let mut jump = keyboard.just_pressed(KeyCode::Space);
-    let mut sprint =
-        keyboard.is_key_pressed(KeyCode::ShiftLeft) || keyboard.is_key_pressed(KeyCode::ShiftRight);
     let mut dash_pressed =
         keyboard.just_pressed(KeyCode::ControlLeft) || keyboard.just_pressed(KeyCode::ControlRight);
 
@@ -73,7 +71,6 @@ pub fn movement(boomer_world: &mut BoomerWorld, world: &mut World) {
             forward_input += stick_y * normalized / magnitude;
             strafe_input += stick_x * normalized / magnitude;
         }
-        sprint = sprint || gamepad.is_pressed(gilrs::Button::LeftTrigger);
     }
     jump = jump
         || world
@@ -91,13 +88,16 @@ pub fn movement(boomer_world: &mut BoomerWorld, world: &mut World) {
             .contains(&gilrs::Button::East);
 
     let (forward, right) = camera_basis(boomer_world, world);
-    let mut move_direction = forward * forward_input + right * strafe_input;
-    let input_magnitude = move_direction.norm();
-    if input_magnitude > 1.0 {
-        move_direction /= input_magnitude;
-    } else if input_magnitude <= 1e-3 {
-        move_direction = Vec3::zeros();
+    let mut wishdir = forward * forward_input + right * strafe_input;
+    let input_length = wishdir.norm();
+    let input_scale = input_length.min(1.0);
+    if input_length > 1e-3 {
+        wishdir /= input_length;
+    } else {
+        wishdir = Vec3::zeros();
     }
+
+    let player_position = position(boomer_world, world);
 
     let Some(controller) = world.core.get_character_controller(player) else {
         return;
@@ -112,8 +112,8 @@ pub fn movement(boomer_world: &mut BoomerWorld, world: &mut World) {
         velocity.x = dash_dir.x * tuning::DASH_SPEED;
         velocity.z = dash_dir.z * tuning::DASH_SPEED;
     } else if dash_pressed && boomer_world.resources.player.dash_cooldown <= 0.0 {
-        let dash_dir = if move_direction.norm() > 0.1 {
-            move_direction
+        let dash_dir = if wishdir.norm() > 0.1 {
+            wishdir
         } else {
             forward
         };
@@ -126,23 +126,23 @@ pub fn movement(boomer_world: &mut BoomerWorld, world: &mut World) {
         velocity.x = dash_dir.x * tuning::DASH_SPEED;
         velocity.z = dash_dir.z * tuning::DASH_SPEED;
     } else {
-        let target_speed = if sprint {
-            tuning::MOVE_SPEED * tuning::SPRINT_MULTIPLIER
-        } else {
-            tuning::MOVE_SPEED
-        };
+        let multiplier = combo_multiplier(boomer_world.resources.game.combo);
+        let ground_speed = tuning::MOVE_SPEED
+            * (1.0 + tuning::COMBO_SPEED_PER_STEP * (multiplier.saturating_sub(1)) as f32);
         let mut horizontal = vec3(velocity.x, 0.0, velocity.z);
-        if move_direction.norm() > 0.01 {
-            let accel = if grounded {
-                tuning::GROUND_ACCEL
-            } else {
-                tuning::AIR_ACCEL
-            };
-            let target = move_direction * target_speed;
-            horizontal += (target - horizontal) * (accel * delta).min(1.0);
-        } else if grounded {
-            let friction = (1.0 - tuning::GROUND_FRICTION * delta).max(0.0);
-            horizontal *= friction;
+        let ground_move = grounded && !jump;
+        if ground_move {
+            horizontal = apply_friction(horizontal, delta);
+        }
+        let (accel, wishspeed) = if ground_move {
+            (tuning::GROUND_ACCEL, ground_speed * input_scale)
+        } else {
+            (tuning::AIR_ACCEL, tuning::AIR_SPEED_CAP * input_scale)
+        };
+        horizontal = accelerate(horizontal, wishdir, wishspeed, accel, delta);
+        let speed = horizontal.norm();
+        if speed > tuning::MAX_GROUND_SPEED {
+            horizontal *= tuning::MAX_GROUND_SPEED / speed;
         }
         velocity.x = horizontal.x;
         velocity.z = horizontal.z;
@@ -152,9 +152,49 @@ pub fn movement(boomer_world: &mut BoomerWorld, world: &mut World) {
         velocity.y = tuning::JUMP_IMPULSE;
     }
 
+    let launched = grounded && pad_launch(boomer_world, player_position);
+    if launched {
+        velocity.y = velocity.y.max(tuning::PAD_IMPULSE);
+        boomer_world.resources.game.shake += tuning::DASH_SHAKE;
+        audio::play(boomer_world, world, audio::PAD, 0.6);
+    }
+
     if let Some(controller) = world.core.get_character_controller_mut(player) {
         controller.velocity = velocity;
     }
+}
+
+/// Accelerate toward `wishdir` only up to `wishspeed` measured *along* that
+/// direction — the projection cap that makes strafe-jumping build real speed.
+fn accelerate(velocity: Vec3, wishdir: Vec3, wishspeed: f32, accel: f32, delta: f32) -> Vec3 {
+    if wishdir.norm() < 1e-3 || wishspeed <= 0.0 {
+        return velocity;
+    }
+    let current_speed = dot(&velocity, &wishdir);
+    let add_speed = wishspeed - current_speed;
+    if add_speed <= 0.0 {
+        return velocity;
+    }
+    let accel_speed = (accel * wishspeed * delta).min(add_speed);
+    velocity + wishdir * accel_speed
+}
+
+fn apply_friction(velocity: Vec3, delta: f32) -> Vec3 {
+    let speed = velocity.norm();
+    if speed < 1e-3 {
+        return Vec3::zeros();
+    }
+    let control = speed.max(tuning::STOP_SPEED);
+    let drop = control * tuning::GROUND_FRICTION * delta;
+    velocity * (speed - drop).max(0.0) / speed
+}
+
+fn pad_launch(boomer_world: &BoomerWorld, player_position: Vec3) -> bool {
+    boomer_world.resources.level.pads.iter().any(|pad| {
+        let dx = player_position.x - pad.x;
+        let dz = player_position.z - pad.z;
+        (dx * dx + dz * dz).sqrt() < tuning::PAD_RADIUS
+    })
 }
 
 pub fn apply_camera_feel(boomer_world: &mut BoomerWorld, world: &mut World) {

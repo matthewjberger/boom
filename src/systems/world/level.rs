@@ -1,4 +1,4 @@
-use crate::content::{BlockKind, Level};
+use crate::content::{BlockKind, Level, LevelData, atmosphere_for};
 use crate::ecs::BoomerWorld;
 use crate::systems::world::textures::{self, MAT_EXIT};
 use crate::tuning;
@@ -18,57 +18,8 @@ const WALL_HEIGHT: f32 = 8.0;
 const WALL_THICKNESS: f32 = 1.0;
 
 pub fn build(boomer_world: &mut BoomerWorld, world: &mut World, level: &Level) {
-    let settings = &mut world.resources.render_settings;
-    settings.atmosphere = level.atmosphere;
-    settings.fog = Some(Fog {
-        color: level.fog,
-        start: 16.0,
-        end: 60.0,
-    });
-    capture_procedural_atmosphere_ibl(world, level.atmosphere, 0.0);
-
-    let mut geometry: Vec<Entity> = Vec::new();
-    let span = tuning::ARENA_HALF * 2.0;
-
-    geometry.push(spawn_block(
-        world,
-        "Floor",
-        vec3(0.0, -0.5, 0.0),
-        vec3(span, 1.0, span),
-        textures::floor_material(),
-    ));
-
-    let edge = tuning::ARENA_HALF + WALL_THICKNESS * 0.5;
-    let wall_length = span + WALL_THICKNESS * 2.0;
-    let height_center = WALL_HEIGHT * 0.5;
-    geometry.push(spawn_block(
-        world,
-        "Wall",
-        vec3(0.0, height_center, -edge),
-        vec3(wall_length, WALL_HEIGHT, WALL_THICKNESS),
-        textures::wall_material(),
-    ));
-    geometry.push(spawn_block(
-        world,
-        "Wall",
-        vec3(0.0, height_center, edge),
-        vec3(wall_length, WALL_HEIGHT, WALL_THICKNESS),
-        textures::wall_material(),
-    ));
-    geometry.push(spawn_block(
-        world,
-        "Wall",
-        vec3(-edge, height_center, 0.0),
-        vec3(WALL_THICKNESS, WALL_HEIGHT, wall_length),
-        textures::wall_material(),
-    ));
-    geometry.push(spawn_block(
-        world,
-        "Wall",
-        vec3(edge, height_center, 0.0),
-        vec3(WALL_THICKNESS, WALL_HEIGHT, wall_length),
-        textures::wall_material(),
-    ));
+    apply_environment(world, level.atmosphere, level.fog);
+    let mut geometry = spawn_shell(world);
 
     for (cx, cy, cz, sx, sy, sz, kind) in level.blocks {
         geometry.push(spawn_block(
@@ -78,6 +29,24 @@ pub fn build(boomer_world: &mut BoomerWorld, world: &mut World, level: &Level) {
             vec3(*sx, *sy, *sz),
             material_for(*kind),
         ));
+    }
+
+    for (cx, cy, cz, sx, sy, sz, pitch, yaw) in level.ramps {
+        let entity = spawn_block(
+            world,
+            "Ramp",
+            vec3(*cx, *cy, *cz),
+            vec3(*sx, *sy, *sz),
+            textures::platform_material(),
+        );
+        if let Some(transform) = world.core.get_local_transform_mut(entity) {
+            transform.rotation = nalgebra_glm::quat_angle_axis(*yaw, &vec3(0.0, 1.0, 0.0))
+                * nalgebra_glm::quat_angle_axis(*pitch, &vec3(1.0, 0.0, 0.0));
+        }
+        world
+            .core
+            .set_local_transform_dirty(entity, LocalTransformDirty);
+        geometry.push(entity);
     }
 
     for (x, z, color) in level.beacons {
@@ -93,7 +62,114 @@ pub fn build(boomer_world: &mut BoomerWorld, world: &mut World, level: &Level) {
         geometry.push(spawn_embers(world, vec3(*x, 0.2, *z), color));
     }
 
+    let pads = spawn_pads(world, level.pads, &mut geometry);
     let exit_position = vec3(level.exit[0], 0.0, level.exit[1]);
+    finalize_level(boomer_world, world, geometry, pads, exit_position);
+}
+
+/// Build a level from owned editor/custom data (no beacons or ramps).
+pub fn build_dynamic(boomer_world: &mut BoomerWorld, world: &mut World, data: &LevelData) {
+    apply_environment(world, atmosphere_for(data.atmosphere_index), data.fog);
+    let mut geometry = spawn_shell(world);
+
+    for (cx, cy, cz, sx, sy, sz, kind) in &data.blocks {
+        geometry.push(spawn_block(
+            world,
+            "Block",
+            vec3(*cx, *cy, *cz),
+            vec3(*sx, *sy, *sz),
+            material_for(*kind),
+        ));
+    }
+
+    let pads = spawn_pads(world, &data.pads, &mut geometry);
+    let exit_position = vec3(data.exit[0], 0.0, data.exit[1]);
+    finalize_level(boomer_world, world, geometry, pads, exit_position);
+}
+
+pub fn apply_environment(world: &mut World, atmosphere: Atmosphere, fog: [f32; 3]) {
+    let settings = &mut world.resources.render_settings;
+    settings.atmosphere = atmosphere;
+    settings.fog = Some(Fog {
+        color: fog,
+        start: 16.0,
+        end: 60.0,
+    });
+    capture_procedural_atmosphere_ibl(world, atmosphere, 0.0);
+}
+
+fn spawn_shell(world: &mut World) -> Vec<Entity> {
+    let mut geometry: Vec<Entity> = Vec::new();
+    let span = tuning::ARENA_HALF * 2.0;
+
+    geometry.push(spawn_block(
+        world,
+        "Floor",
+        vec3(0.0, -0.5, 0.0),
+        vec3(span, 1.0, span),
+        textures::floor_material(),
+    ));
+
+    let edge = tuning::ARENA_HALF + WALL_THICKNESS * 0.5;
+    let wall_length = span + WALL_THICKNESS * 2.0;
+    let height_center = WALL_HEIGHT * 0.5;
+    let walls = [
+        (
+            vec3(0.0, height_center, -edge),
+            vec3(wall_length, WALL_HEIGHT, WALL_THICKNESS),
+        ),
+        (
+            vec3(0.0, height_center, edge),
+            vec3(wall_length, WALL_HEIGHT, WALL_THICKNESS),
+        ),
+        (
+            vec3(-edge, height_center, 0.0),
+            vec3(WALL_THICKNESS, WALL_HEIGHT, wall_length),
+        ),
+        (
+            vec3(edge, height_center, 0.0),
+            vec3(WALL_THICKNESS, WALL_HEIGHT, wall_length),
+        ),
+    ];
+    for (center, size) in walls {
+        geometry.push(spawn_block(
+            world,
+            "Wall",
+            center,
+            size,
+            textures::wall_material(),
+        ));
+    }
+    geometry
+}
+
+fn spawn_pads(world: &mut World, pads: &[(f32, f32)], geometry: &mut Vec<Entity>) -> Vec<Vec3> {
+    let mut out: Vec<Vec3> = Vec::new();
+    for (x, z) in pads {
+        let pad_color = vec3(0.3, 1.4, 1.7);
+        let pad = spawn_mesh_at(world, "Cube", vec3(*x, 0.12, *z), vec3(2.4, 0.24, 2.4));
+        if let Some(name) = world.core.get_name_mut(pad) {
+            name.0 = "Pad".to_string();
+        }
+        world
+            .core
+            .set_material_ref(pad, MaterialRef::new(textures::PAD_MATERIAL.to_string()));
+        geometry.push(pad);
+        geometry.push(spawn_lamp(world, vec3(*x, 0.8, *z), pad_color, 18.0, 9.0));
+        out.push(vec3(*x, 0.0, *z));
+    }
+    out
+}
+
+fn finalize_level(
+    boomer_world: &mut BoomerWorld,
+    world: &mut World,
+    mut geometry: Vec<Entity>,
+    pads: Vec<Vec3>,
+    exit_position: Vec3,
+) {
+    boomer_world.resources.level.pads = pads;
+
     let exit = spawn_mesh_at(
         world,
         "Cube",
@@ -151,13 +227,14 @@ pub fn open_exit(boomer_world: &mut BoomerWorld, world: &mut World) {
     boomer_world.resources.level.geometry.push(lamp);
 }
 
-fn material_for(kind: BlockKind) -> Material {
+pub fn material_for(kind: BlockKind) -> Material {
     match kind {
         BlockKind::Wall => textures::wall_material(),
         BlockKind::Pillar => textures::pillar_material(),
         BlockKind::Cover => textures::platform_material(),
         BlockKind::Choke => textures::accent_material(),
         BlockKind::Monument => textures::pillar_material(),
+        BlockKind::Platform => textures::platform_material(),
     }
 }
 

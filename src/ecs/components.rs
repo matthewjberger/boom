@@ -10,6 +10,10 @@ pub enum EnemyKind {
     Swarmer,
     /// Keeps distance and lobs fireballs. The reason you keep moving.
     Caster,
+    /// Heavy bruiser. Soaks shots, telegraphs a slow slam, caps late waves.
+    Brute,
+    /// Winged flyer. Hovers above the fray, then dive-bombs from the air.
+    Gargoyle,
 }
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
@@ -25,6 +29,8 @@ pub enum EnemyState {
 #[derive(Default, Clone, Copy, Debug)]
 pub struct Enemy {
     pub kind: EnemyKind,
+    /// Stronger, larger, brighter variant introduced in later cycles.
+    pub elite: bool,
     pub position: Vec3,
     /// Knockback / impulse velocity, decays each frame.
     pub velocity: Vec3,
@@ -32,11 +38,14 @@ pub struct Enemy {
     pub state: EnemyState,
     pub attack_cooldown: f32,
     pub fire_cooldown: f32,
-    /// Caster wind-up before a shot, doubles as an attack telegraph.
+    /// Wind-up before a strike (melee lunge or caster shot): the dodge window.
     pub windup: f32,
     pub hit_flash: f32,
     pub death_timer: f32,
-    pub showing_hurt: bool,
+    /// Animation clock and the material code currently displayed (sentinel 255
+    /// forces the first render to set the material).
+    pub anim_time: f32,
+    pub shown: u8,
     pub strafe_dir: f32,
 }
 

@@ -1,17 +1,15 @@
+use crate::art;
 use crate::ecs::{BoomerWorld, ENEMY, ENGINE_ENTITY, Enemy, EnemyKind, EnemyState, EngineEntity};
 use crate::systems::common::random_range;
-use crate::systems::world::textures::{
-    MAT_CASTER_HURT, MAT_CASTER_IDLE, MAT_IMP_HURT, MAT_IMP_IDLE, MAT_SWARM_HURT, MAT_SWARM_IDLE,
-};
 use crate::systems::world::{audio, billboard, fx, game, pickups, player, projectiles};
 use crate::tuning;
 use nalgebra_glm::{Vec3, vec3};
 use nightshade::ecs::physics::resources::physics_world_cast_ray;
 use nightshade::prelude::*;
 
-const CASTER_WINDUP: f32 = 0.45;
 const PROBE_HEIGHT: f32 = 0.6;
 const PROBE_DISTANCE: f32 = 1.9;
+const HURT_CODE: u8 = 200;
 
 struct Stats {
     health: f32,
@@ -21,9 +19,11 @@ struct Stats {
     attack_range: f32,
     attack_damage: f32,
     attack_cooldown: f32,
+    windup_time: f32,
+    lunge_speed: f32,
+    lunge_reach: f32,
     score: u32,
-    idle: &'static str,
-    hurt: &'static str,
+    key: &'static str,
     color: Vec3,
 }
 
@@ -37,9 +37,11 @@ fn stats(kind: EnemyKind) -> Stats {
             attack_range: tuning::IMP_ATTACK_RANGE,
             attack_damage: tuning::IMP_DAMAGE,
             attack_cooldown: tuning::IMP_ATTACK_COOLDOWN,
+            windup_time: tuning::IMP_WINDUP,
+            lunge_speed: tuning::IMP_LUNGE,
+            lunge_reach: tuning::IMP_LUNGE_REACH,
             score: tuning::IMP_SCORE,
-            idle: MAT_IMP_IDLE,
-            hurt: MAT_IMP_HURT,
+            key: "imp",
             color: vec3(1.0, 0.3, 0.2),
         },
         EnemyKind::Swarmer => Stats {
@@ -50,9 +52,11 @@ fn stats(kind: EnemyKind) -> Stats {
             attack_range: tuning::SWARM_ATTACK_RANGE,
             attack_damage: tuning::SWARM_DAMAGE,
             attack_cooldown: tuning::SWARM_ATTACK_COOLDOWN,
+            windup_time: tuning::SWARM_WINDUP,
+            lunge_speed: tuning::SWARM_LUNGE,
+            lunge_reach: tuning::SWARM_LUNGE_REACH,
             score: tuning::SWARM_SCORE,
-            idle: MAT_SWARM_IDLE,
-            hurt: MAT_SWARM_HURT,
+            key: "swarm",
             color: vec3(0.4, 1.0, 0.4),
         },
         EnemyKind::Caster => Stats {
@@ -63,44 +67,123 @@ fn stats(kind: EnemyKind) -> Stats {
             attack_range: 0.0,
             attack_damage: 0.0,
             attack_cooldown: 0.0,
+            windup_time: tuning::CASTER_WINDUP,
+            lunge_speed: 0.0,
+            lunge_reach: 0.0,
             score: tuning::CASTER_SCORE,
-            idle: MAT_CASTER_IDLE,
-            hurt: MAT_CASTER_HURT,
+            key: "caster",
             color: vec3(0.75, 0.4, 1.0),
         },
+        EnemyKind::Brute => Stats {
+            health: tuning::BRUTE_HEALTH,
+            speed: tuning::BRUTE_SPEED,
+            width: tuning::BRUTE_WIDTH,
+            height: tuning::BRUTE_HEIGHT,
+            attack_range: tuning::BRUTE_ATTACK_RANGE,
+            attack_damage: tuning::BRUTE_DAMAGE,
+            attack_cooldown: tuning::BRUTE_ATTACK_COOLDOWN,
+            windup_time: tuning::BRUTE_WINDUP,
+            lunge_speed: tuning::BRUTE_LUNGE,
+            lunge_reach: tuning::BRUTE_LUNGE_REACH,
+            score: tuning::BRUTE_SCORE,
+            key: "brute",
+            color: vec3(1.0, 0.45, 0.15),
+        },
+        EnemyKind::Gargoyle => Stats {
+            health: tuning::GARGOYLE_HEALTH,
+            speed: tuning::GARGOYLE_SPEED,
+            width: tuning::GARGOYLE_WIDTH,
+            height: tuning::GARGOYLE_HEIGHT,
+            attack_range: tuning::GARGOYLE_ATTACK_RANGE,
+            attack_damage: tuning::GARGOYLE_DAMAGE,
+            attack_cooldown: tuning::GARGOYLE_ATTACK_COOLDOWN,
+            windup_time: tuning::GARGOYLE_WINDUP,
+            lunge_speed: tuning::GARGOYLE_LUNGE,
+            lunge_reach: tuning::GARGOYLE_LUNGE_REACH,
+            score: tuning::GARGOYLE_SCORE,
+            key: "gargoyle",
+            color: vec3(0.55, 0.55, 1.0),
+        },
     }
+}
+
+fn is_melee(kind: EnemyKind) -> bool {
+    matches!(kind, EnemyKind::Imp | EnemyKind::Swarmer | EnemyKind::Brute)
+}
+
+fn is_flying(kind: EnemyKind) -> bool {
+    matches!(kind, EnemyKind::Gargoyle)
+}
+
+/// Resolve the registered material name for an enemy's current visual state.
+fn enemy_material(key: &str, elite: bool, hurt: bool, frame: usize) -> String {
+    if hurt {
+        format!("boom_mat_{key}_hurt")
+    } else if elite {
+        format!("boom_mat_{key}_f{frame}_e")
+    } else {
+        format!("boom_mat_{key}_f{frame}")
+    }
+}
+
+fn body_scale(s: &Stats, elite: bool) -> Vec3 {
+    let multiplier = if elite { tuning::ELITE_SCALE } else { 1.0 };
+    vec3(s.width * multiplier, s.height * multiplier, 1.0)
 }
 
 pub fn center(enemy: &Enemy) -> Vec3 {
     enemy.position + vec3(0.0, tuning::ENEMY_CENTER_HEIGHT, 0.0)
 }
 
-pub fn spawn(boomer_world: &mut BoomerWorld, world: &mut World, kind: EnemyKind, position: Vec3) {
+pub fn spawn(
+    boomer_world: &mut BoomerWorld,
+    world: &mut World,
+    kind: EnemyKind,
+    elite: bool,
+    position: Vec3,
+) {
     let s = stats(kind);
-    let engine = billboard::spawn(world, s.idle, position, vec3(s.width, s.height, 1.0));
+    let mut spawn_position = position;
+    if is_flying(kind) {
+        spawn_position.y = tuning::GARGOYLE_HOVER;
+    }
+    let idle_material = enemy_material(s.key, elite, false, 0);
+    let engine = billboard::spawn(world, &idle_material, spawn_position, body_scale(&s, elite));
     let strafe_roll = random_range(&mut boomer_world.resources.game.random_state, 0.0, 1.0);
     let fire_jitter = random_range(&mut boomer_world.resources.game.random_state, 0.4, 1.0)
         * tuning::CASTER_FIRE_COOLDOWN;
+    let health = if elite {
+        s.health * tuning::ELITE_HEALTH_MULT
+    } else {
+        s.health
+    };
     let game_entity = boomer_world.spawn_entities(ENEMY | ENGINE_ENTITY, 1)[0];
     boomer_world.set_engine_entity(game_entity, EngineEntity(engine));
     boomer_world.set_enemy(
         game_entity,
         Enemy {
             kind,
-            position,
+            elite,
+            position: spawn_position,
             velocity: Vec3::zeros(),
-            health: s.health,
+            health,
             state: EnemyState::Chase,
             attack_cooldown: 0.0,
             fire_cooldown: fire_jitter,
             windup: 0.0,
             hit_flash: 0.0,
             death_timer: 0.0,
-            showing_hurt: false,
+            anim_time: strafe_roll * 3.0,
+            shown: 255,
             strafe_dir: if strafe_roll < 0.5 { -1.0 } else { 1.0 },
         },
     );
-    fx::hit(boomer_world, world, position + vec3(0.0, 1.0, 0.0), s.color);
+    fx::hit(
+        boomer_world,
+        world,
+        spawn_position + vec3(0.0, 1.0, 0.0),
+        s.color,
+    );
 }
 
 pub fn damage(
@@ -118,6 +201,7 @@ pub fn damage(
         return;
     }
     let kind = enemy.kind;
+    let elite = enemy.elite;
     let s = stats(kind);
     let mut updated = *enemy;
     updated.health -= amount;
@@ -137,6 +221,8 @@ pub fn damage(
             EnemyKind::Swarmer => 60,
             EnemyKind::Imp => 90,
             EnemyKind::Caster => 110,
+            EnemyKind::Gargoyle => 100,
+            EnemyKind::Brute => 150,
         };
         fx::death(
             boomer_world,
@@ -145,7 +231,16 @@ pub fn damage(
             s.color,
             count,
         );
-        game::award(boomer_world, s.score);
+        let score = if elite {
+            s.score * tuning::ELITE_SCORE_MULT
+        } else {
+            s.score
+        };
+        game::award(boomer_world, score);
+        if elite || matches!(kind, EnemyKind::Brute) {
+            boomer_world.resources.game.shake += 0.25;
+            boomer_world.resources.game.hitstop = boomer_world.resources.game.hitstop.max(0.04);
+        }
         audio::play(boomer_world, world, audio::ENEMY_DEATH, 1.0);
         pickups::maybe_drop(boomer_world, world, position);
     } else {
@@ -170,6 +265,8 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
 
     let mut melee_damage = 0.0;
     let mut fireballs: Vec<(Vec3, Vec3)> = Vec::new();
+    let mut telegraphs: Vec<(Vec3, Vec3)> = Vec::new();
+    let time = world.resources.window.timing.uptime_milliseconds as f32 / 1000.0;
 
     for (_, _, enemy) in snapshots.iter_mut() {
         if enemy.state == EnemyState::Dying {
@@ -193,48 +290,109 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
             vec3(0.0, 0.0, 1.0)
         };
 
-        match enemy.kind {
-            EnemyKind::Imp | EnemyKind::Swarmer => {
-                if distance > s.attack_range {
-                    enemy.state = EnemyState::Chase;
-                    let steer = avoid(world, enemy.position, direction);
-                    enemy.position += steer * s.speed * delta;
-                } else {
-                    enemy.state = EnemyState::Attack;
-                    if enemy.attack_cooldown <= 0.0 {
-                        enemy.attack_cooldown = s.attack_cooldown;
-                        melee_damage += s.attack_damage;
+        if is_flying(enemy.kind) {
+            let center_offset = s.height * 0.5;
+            let to_player_3d = player_center - (enemy.position + vec3(0.0, center_offset, 0.0));
+            let dist3 = to_player_3d.norm();
+            let dir3 = if dist3 > 1e-3 {
+                to_player_3d / dist3
+            } else {
+                vec3(0.0, 0.0, 1.0)
+            };
+            if enemy.windup > 0.0 {
+                enemy.state = EnemyState::Attack;
+                enemy.windup -= delta;
+                if enemy.windup <= 0.0 {
+                    enemy.attack_cooldown = s.attack_cooldown;
+                    enemy.velocity += dir3 * s.lunge_speed;
+                    if dist3 <= s.attack_range + s.lunge_reach {
+                        let multiplier = if enemy.elite {
+                            tuning::ELITE_DAMAGE_MULT
+                        } else {
+                            1.0
+                        };
+                        melee_damage += s.attack_damage * multiplier;
                     }
                 }
-            }
-            EnemyKind::Caster => {
+            } else if dist3 > s.attack_range {
                 enemy.state = EnemyState::Chase;
-                let preferred = tuning::CASTER_PREFERRED_RANGE;
-                let move_dir = if distance > preferred + 1.5 {
-                    direction
-                } else if distance < preferred - 1.5 {
-                    -direction
-                } else {
-                    vec3(direction.z, 0.0, -direction.x) * enemy.strafe_dir
-                };
-                let steer = avoid(world, enemy.position, move_dir);
+                let steer = avoid(world, enemy.position, direction);
                 enemy.position += steer * s.speed * delta;
-
-                if enemy.windup > 0.0 {
-                    enemy.windup -= delta;
-                    if enemy.windup <= 0.0 {
-                        enemy.fire_cooldown = tuning::CASTER_FIRE_COOLDOWN;
-                        fireballs.push((center(enemy), player_center));
+                let target_alt =
+                    tuning::GARGOYLE_HOVER + (time * 2.2 + enemy.position.x).sin() * 0.45;
+                enemy.position.y += (target_alt - enemy.position.y) * (3.0 * delta).min(1.0);
+            } else if enemy.attack_cooldown <= 0.0 {
+                enemy.state = EnemyState::Attack;
+                enemy.windup = s.windup_time;
+                telegraphs.push((enemy.position + vec3(0.0, s.height * 0.6, 0.0), s.color));
+            } else {
+                enemy.state = EnemyState::Attack;
+                enemy.position.y +=
+                    (tuning::GARGOYLE_HOVER - enemy.position.y) * (2.0 * delta).min(1.0);
+            }
+        } else if is_melee(enemy.kind) {
+            let vertical = player_center.y - (enemy.position.y + tuning::ENEMY_CENTER_HEIGHT);
+            let attack_distance = (distance * distance + vertical * vertical).sqrt();
+            if enemy.windup > 0.0 {
+                enemy.state = EnemyState::Attack;
+                enemy.windup -= delta;
+                if enemy.windup <= 0.0 {
+                    enemy.attack_cooldown = s.attack_cooldown;
+                    enemy.velocity += direction * s.lunge_speed;
+                    if attack_distance <= s.attack_range + s.lunge_reach {
+                        let multiplier = if enemy.elite {
+                            tuning::ELITE_DAMAGE_MULT
+                        } else {
+                            1.0
+                        };
+                        melee_damage += s.attack_damage * multiplier;
                     }
-                } else if enemy.fire_cooldown <= 0.0 {
-                    enemy.windup = CASTER_WINDUP;
                 }
+            } else if attack_distance > s.attack_range {
+                enemy.state = EnemyState::Chase;
+                let steer = avoid(world, enemy.position, direction);
+                enemy.position += steer * s.speed * delta;
+            } else if enemy.attack_cooldown <= 0.0 {
+                enemy.state = EnemyState::Attack;
+                enemy.windup = s.windup_time;
+                telegraphs.push((enemy.position + vec3(0.0, s.height * 0.6, 0.0), s.color));
+            } else {
+                enemy.state = EnemyState::Attack;
+            }
+        } else {
+            enemy.state = EnemyState::Chase;
+            let preferred = tuning::CASTER_PREFERRED_RANGE;
+            let move_dir = if distance > preferred + 1.5 {
+                direction
+            } else if distance < preferred - 1.5 {
+                -direction
+            } else {
+                vec3(direction.z, 0.0, -direction.x) * enemy.strafe_dir
+            };
+            let steer = avoid(world, enemy.position, move_dir);
+            enemy.position += steer * s.speed * delta;
+
+            if enemy.windup > 0.0 {
+                enemy.windup -= delta;
+                if enemy.windup <= 0.0 {
+                    enemy.fire_cooldown = tuning::CASTER_FIRE_COOLDOWN;
+                    fireballs.push((center(enemy), player_center));
+                }
+            } else if enemy.fire_cooldown <= 0.0 {
+                enemy.windup = s.windup_time;
             }
         }
 
         enemy.position.x = enemy.position.x.clamp(-bound, bound);
         enemy.position.z = enemy.position.z.clamp(-bound, bound);
-        enemy.position.y = 0.0;
+        if is_flying(enemy.kind) {
+            enemy.position.y = enemy
+                .position
+                .y
+                .clamp(tuning::GARGOYLE_ALT_MIN, tuning::GARGOYLE_ALT_MAX);
+        } else {
+            enemy.position.y = 0.0;
+        }
     }
 
     separate(&mut snapshots, bound);
@@ -246,27 +404,45 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
         projectiles::spawn(boomer_world, world, origin, target);
         audio::play(boomer_world, world, audio::FIREBALL, 0.32);
     }
+    for (position, color) in telegraphs {
+        fx::hit(boomer_world, world, position, color);
+    }
 
     for (game_entity, engine, enemy) in &snapshots {
         let s = stats(enemy.kind);
+        let base = body_scale(&s, enemy.elite);
         if enemy.state == EnemyState::Dying {
             let fraction = (enemy.death_timer / tuning::ENEMY_DEATH_TIME).max(0.0);
-            set_scale(world, *engine, vec3(s.width, s.height * fraction, 1.0));
+            set_scale(world, *engine, vec3(base.x, base.y * fraction, 1.0));
         } else {
             let mut next = *enemy;
             let hurt = next.hit_flash > 0.0;
-            if hurt != next.showing_hurt {
-                next.showing_hurt = hurt;
-                let material = if hurt { s.hurt } else { s.idle };
+            let moving = matches!(next.state, EnemyState::Chase);
+            let rate = if moving { 1.5 } else { 1.0 };
+            next.anim_time += delta * tuning::ANIM_FPS * rate;
+            let frame = (next.anim_time as usize) % art::ANIM_FRAMES;
+            let code = if hurt {
+                HURT_CODE
+            } else {
+                frame as u8 + if enemy.elite { 100 } else { 0 }
+            };
+            if code != next.shown {
+                next.shown = code;
+                let material = enemy_material(s.key, enemy.elite, hurt, frame);
                 world
                     .core
-                    .set_material_ref(*engine, MaterialRef::new(material.to_string()));
+                    .set_material_ref(*engine, MaterialRef::new(material));
             }
-            let windup_scale = 1.0 + (next.windup / CASTER_WINDUP).clamp(0.0, 1.0) * 0.2;
+            let windup_fraction = if s.windup_time > 0.0 {
+                (next.windup / s.windup_time).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let windup_scale = 1.0 + windup_fraction * 0.25;
             set_scale(
                 world,
                 *engine,
-                vec3(s.width * windup_scale, s.height * windup_scale, 1.0),
+                vec3(base.x * windup_scale, base.y * windup_scale, 1.0),
             );
             if let Some(slot) = boomer_world.get_enemy_mut(*game_entity) {
                 *slot = next;

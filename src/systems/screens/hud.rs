@@ -1,5 +1,5 @@
 use crate::content;
-use crate::ecs::{BoomerWorld, HudHandles, Phase, Screen};
+use crate::ecs::{BoomerWorld, HudHandles, Phase, Screen, WeaponKind, WeaponState};
 use crate::systems::common::combo_multiplier;
 use crate::theme::*;
 use crate::tuning;
@@ -17,6 +17,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> HudHandles {
     let mut health_label = Entity::default();
     let mut ammo_label = Entity::default();
     let mut weapon_label = Entity::default();
+    let mut ammo_rack = Entity::default();
     let mut wave_label = Entity::default();
     let mut score_label = Entity::default();
     let mut combo_label = Entity::default();
@@ -77,6 +78,19 @@ pub fn build(tree: &mut UiTreeBuilder) -> HudHandles {
             .text_right()
             .with_text_outline(vec4(0.0, 0.0, 0.0, 0.9), 2.0)
             .color_raw::<UiBase>(AMMO)
+            .entity();
+
+        ammo_rack = tree
+            .add_node()
+            .window(
+                Rl(vec2(100.0, 100.0)) + Ab(vec2(-30.0, -22.0)),
+                Ab(vec2(420.0, 22.0)),
+                Anchor::BottomRight,
+            )
+            .with_text("", 18.0)
+            .text_right()
+            .with_text_outline(vec4(0.0, 0.0, 0.0, 0.9), 1.5)
+            .color_raw::<UiBase>(TEXT_DIM)
             .entity();
 
         score_label = tree
@@ -149,6 +163,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> HudHandles {
         health_label,
         ammo_label,
         weapon_label,
+        ammo_rack,
         wave_label,
         score_label,
         combo_label,
@@ -174,23 +189,32 @@ pub fn update(boomer_world: &BoomerWorld, world: &mut World) {
         hud.health_label,
         &format!("{:.0}", boomer_world.resources.stats.health.max(0.0)),
     );
+    let weapon = &boomer_world.resources.weapon;
     ui_set_text(
         world,
         hud.ammo_label,
-        &format!("{}", boomer_world.resources.weapon.ammo),
+        &format!("{}", weapon.ammo(weapon.current)),
     );
-    ui_set_text(
-        world,
-        hud.weapon_label,
-        boomer_world.resources.weapon.current.name(),
-    );
+    ui_set_text(world, hud.weapon_label, weapon.current.name());
+    ui_set_text(world, hud.ammo_rack, &weapon_rack(weapon));
     ui_set_text(world, hud.score_label, &format!("{}", game.score));
     let level = &boomer_world.resources.level;
     let definition = content::level(level.index);
+    let level_name = if level.custom {
+        "CUSTOM"
+    } else {
+        definition.name
+    };
     ui_set_text(
         world,
         hud.wave_label,
-        &format!("LEVEL {}: {}", level.index + 1, definition.name),
+        &format!(
+            "LEVEL {}: {}   WAVE {}/{}",
+            level.index + 1,
+            level_name,
+            level.wave,
+            level.wave_count
+        ),
     );
 
     let score_lit = lerp(
@@ -240,7 +264,7 @@ pub fn update(boomer_world: &BoomerWorld, world: &mut World) {
         ui_set_text(world, hud.hint_label, "REACH THE GREEN GATE");
         set_color(world, hud.status_label, vec4(0.4, 1.0, 0.6, 1.0));
     } else if intro {
-        ui_set_text(world, hud.status_label, definition.name);
+        ui_set_text(world, hud.status_label, level_name);
         ui_set_text(world, hud.hint_label, &format!("LEVEL {}", level.index + 1));
         set_color(world, hud.status_label, ACCENT);
     }
@@ -271,6 +295,23 @@ pub fn update(boomer_world: &BoomerWorld, world: &mut World) {
         hud.low_health_overlay,
         vec4(0.6, 0.0, 0.0, lowness * pulse),
     );
+}
+
+fn weapon_rack(weapon: &WeaponState) -> String {
+    let segment = |kind: WeaponKind, tag: &str| {
+        let count = weapon.ammo(kind);
+        if weapon.current == kind {
+            format!("[{tag} {count}]")
+        } else {
+            format!("{tag} {count}")
+        }
+    };
+    format!(
+        "{}   {}   {}",
+        segment(WeaponKind::Shotgun, "1 SG"),
+        segment(WeaponKind::Nailgun, "2 NG"),
+        segment(WeaponKind::Rocket, "3 RL"),
+    )
 }
 
 fn set_color(world: &mut World, entity: Entity, color: Vec4) {

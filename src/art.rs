@@ -6,6 +6,9 @@ pub struct Sprite {
 
 const SCALE: u32 = 8;
 
+/// Number of procedurally generated animation frames per enemy.
+pub const ANIM_FRAMES: usize = 3;
+
 const IMP: &[&str] = &[
     "...nn........nn.",
     "..nn........nn..",
@@ -43,6 +46,18 @@ const SWARMER: &[&str] = &[
     "s..o.oggo.o..s",
 ];
 
+const GARGOYLE: &[&str] = &[
+    "w.........w",
+    "wo.......ow",
+    "wwobbbbboww",
+    "wwobebeboww",
+    "wwobbbbboww",
+    ".wobbbbbow.",
+    "..obbbbbo..",
+    "..obdddbo..",
+    "...dd.dd...",
+];
+
 const CASTER: &[&str] = &[
     "....oooo....",
     "...orrrro...",
@@ -63,6 +78,50 @@ const CASTER: &[&str] = &[
     "....oddo....",
     "....o..o....",
 ];
+
+const BRUTE: &[&str] = &[
+    "....hh......hh....",
+    "...haa......aah...",
+    "...haaa....aaah...",
+    "....oaaaaaaaao....",
+    "...oaaaaaaaaaao...",
+    "..oaaaaaaaaaaaao..",
+    "..oaaeeaaaaeeaao..",
+    "..oaaeeaaaaeeaao..",
+    "..oaaaaammaaaaao..",
+    "..oaaaammmmaaaao..",
+    ".oaaaaaaaaaaaaaao.",
+    "oaaaaaaaaaaaaaaaao",
+    "oaaaddaaaaaaddaaao",
+    "oaaaddaaaaaaddaaao",
+    "oaaaaaaaaaaaaaaaao",
+    ".oaaaaaaaaaaaaaao.",
+    "..oaao......oaao..",
+    "..oaao......oaao..",
+    "..oddo......oddo..",
+    "..oddo......oddo..",
+];
+
+fn brute_color(symbol: char, hurt: bool) -> [u8; 4] {
+    let base = match symbol {
+        'o' => [26, 8, 4, 255],
+        'a' => [196, 70, 22, 255],
+        'd' => [96, 30, 10, 255],
+        'm' => [40, 16, 10, 255],
+        'e' => [255, 232, 90, 255],
+        'h' => [60, 18, 8, 255],
+        _ => [0, 0, 0, 0],
+    };
+    brighten(base, hurt)
+}
+
+pub fn brute_idle() -> Sprite {
+    render_grid(BRUTE, |symbol| brute_color(symbol, false))
+}
+
+pub fn brute_hurt() -> Sprite {
+    render_grid(BRUTE, |symbol| brute_color(symbol, true))
+}
 
 fn brighten(color: [u8; 4], hurt: bool) -> [u8; 4] {
     if !hurt || color[3] == 0 {
@@ -101,6 +160,26 @@ fn swarmer_color(symbol: char, hurt: bool) -> [u8; 4] {
         _ => [0, 0, 0, 0],
     };
     brighten(base, hurt)
+}
+
+fn gargoyle_color(symbol: char, hurt: bool) -> [u8; 4] {
+    let base = match symbol {
+        'w' => [92, 100, 126, 255],
+        'o' => [16, 14, 28, 255],
+        'b' => [124, 82, 184, 255],
+        'd' => [58, 38, 96, 255],
+        'e' => [140, 255, 240, 255],
+        _ => [0, 0, 0, 0],
+    };
+    brighten(base, hurt)
+}
+
+pub fn gargoyle_idle() -> Sprite {
+    render_grid(GARGOYLE, |symbol| gargoyle_color(symbol, false))
+}
+
+pub fn gargoyle_hurt() -> Sprite {
+    render_grid(GARGOYLE, |symbol| gargoyle_color(symbol, true))
 }
 
 fn caster_color(symbol: char, hurt: bool) -> [u8; 4] {
@@ -145,6 +224,34 @@ fn blit_cell(rgba: &mut [u8], width: u32, cell_x: u32, cell_y: u32, pixel: [u8; 
             rgba[index + 3] = pixel[3];
         }
     }
+}
+
+/// Shift a sprite by whole pixels, leaving exposed edges transparent. Used to
+/// synthesize animation frames (a bob / sway cycle) from a single base sprite.
+fn offset(base: &Sprite, dx: i32, dy: i32) -> Sprite {
+    let width = base.width as i32;
+    let height = base.height as i32;
+    let mut out = solid(base.width, base.height);
+    for y in 0..height {
+        for x in 0..width {
+            let sx = x - dx;
+            let sy = y - dy;
+            if sx >= 0 && sx < width && sy >= 0 && sy < height {
+                let source = ((sy * width + sx) * 4) as usize;
+                let dest = ((y * width + x) * 4) as usize;
+                out.rgba[dest..dest + 4].copy_from_slice(&base.rgba[source..source + 4]);
+            }
+        }
+    }
+    out
+}
+
+/// Produce animation frame `index` from a base sprite: a small up-bob with a
+/// left/right sway that reads as breathing when idle and a stride when moving.
+pub fn frame(base: &Sprite, index: usize) -> Sprite {
+    const TABLE: [(i32, i32); ANIM_FRAMES] = [(0, 0), (1, -3), (-1, -1)];
+    let (dx, dy) = TABLE[index % ANIM_FRAMES];
+    offset(base, dx, dy)
 }
 
 pub fn imp_idle() -> Sprite {
@@ -294,4 +401,8 @@ fn radial(size: u32, inner: [u8; 3], outer: [u8; 3]) -> Sprite {
 
 pub fn fireball() -> Sprite {
     radial(96, [255, 248, 210], [240, 70, 18])
+}
+
+pub fn rocket() -> Sprite {
+    radial(96, [236, 252, 255], [70, 150, 255])
 }

@@ -25,11 +25,13 @@ pub fn initialize(boomer_world: &mut BoomerWorld, world: &mut World) {
     let level_select_handles = level_select::build(&mut tree);
     let pause_handles = pause::build(&mut tree);
     let hud_handles = hud::build(&mut tree);
+    let editor_handles = crate::systems::editor::build_ui(&mut tree);
     tree.finish();
     boomer_world.resources.ui_handles.title = title_handles;
     boomer_world.resources.ui_handles.level_select = level_select_handles;
     boomer_world.resources.ui_handles.pause = pause_handles;
     boomer_world.resources.ui_handles.hud = hud_handles;
+    boomer_world.resources.ui_handles.editor = editor_handles;
 
     enter(boomer_world, world, Screen::Title);
 }
@@ -86,6 +88,12 @@ fn screen_config(handles: &UiHandles, screen: Screen) -> ScreenConfig {
             gamepad_nav: false,
             focus: None,
         },
+        Screen::Editor => ScreenConfig {
+            physics_enabled: false,
+            cursor_locked: true,
+            gamepad_nav: false,
+            focus: None,
+        },
     }
 }
 
@@ -104,4 +112,5 @@ fn apply_visibility(boomer_world: &BoomerWorld, world: &mut World) {
         handles.hud.root,
         matches!(screen, Screen::InGame | Screen::Paused),
     );
+    ui_set_visible(world, handles.editor.root, matches!(screen, Screen::Editor));
 }

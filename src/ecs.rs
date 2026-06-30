@@ -21,6 +21,7 @@ freecs::ecs! {
         stats: PlayerStats,
         game: GameState,
         level: LevelState,
+        editor: EditorState,
         projectiles: ProjectileState,
         transient: TransientState,
         audio: AudioPool,

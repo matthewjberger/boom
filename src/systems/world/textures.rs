@@ -16,16 +16,15 @@ pub const PLATFORM_TEXTURE: &str = "boom_platform";
 pub const PILLAR_TEXTURE: &str = "boom_pillar";
 pub const ACCENT_TEXTURE: &str = "boom_accent";
 
-pub const MAT_IMP_IDLE: &str = "boom_mat_imp_idle";
-pub const MAT_IMP_HURT: &str = "boom_mat_imp_hurt";
-pub const MAT_SWARM_IDLE: &str = "boom_mat_swarm_idle";
-pub const MAT_SWARM_HURT: &str = "boom_mat_swarm_hurt";
-pub const MAT_CASTER_IDLE: &str = "boom_mat_caster_idle";
-pub const MAT_CASTER_HURT: &str = "boom_mat_caster_hurt";
 pub const MAT_FIREBALL: &str = "boom_mat_fireball";
+pub const MAT_ROCKET: &str = "boom_mat_rocket";
 pub const MAT_MEDKIT: &str = "boom_mat_medkit";
 pub const MAT_AMMO: &str = "boom_mat_ammo";
 pub const MAT_EXIT: &str = "boom_mat_exit";
+pub const PAD_MATERIAL: &str = "boom_mat_pad";
+pub const MARKER_PLAYER: &str = "boom_mat_marker_player";
+pub const MARKER_ENEMY: &str = "boom_mat_marker_enemy";
+pub const MAT_GHOST: &str = "boom_mat_ghost";
 
 pub const BILLBOARD_MESH: &str = "boom_billboard";
 
@@ -60,26 +59,47 @@ pub fn load(world: &mut World) {
         SamplerSettings::DEFAULT,
     );
 
-    upload_sprite(world, "boom_imp_idle", art::imp_idle());
-    upload_sprite(world, "boom_imp_hurt", art::imp_hurt());
-    upload_sprite(world, "boom_swarm_idle", art::swarmer_idle());
-    upload_sprite(world, "boom_swarm_hurt", art::swarmer_hurt());
-    upload_sprite(world, "boom_caster_idle", art::caster_idle());
-    upload_sprite(world, "boom_caster_hurt", art::caster_hurt());
+    register_animated(world, "imp", art::imp_idle(), art::imp_hurt());
+    register_animated(world, "swarm", art::swarmer_idle(), art::swarmer_hurt());
+    register_animated(world, "caster", art::caster_idle(), art::caster_hurt());
+    register_animated(world, "brute", art::brute_idle(), art::brute_hurt());
+    register_animated(
+        world,
+        "gargoyle",
+        art::gargoyle_idle(),
+        art::gargoyle_hurt(),
+    );
+
     upload_sprite(world, "boom_fireball", art::fireball());
+    upload_sprite(world, "boom_rocket", art::rocket());
     upload_sprite(world, "boom_medkit", art::medkit());
     upload_sprite(world, "boom_ammo", art::ammo_box());
 
-    register_material(world, MAT_IMP_IDLE, sprite_material("boom_imp_idle"));
-    register_material(world, MAT_IMP_HURT, hurt_material("boom_imp_hurt"));
-    register_material(world, MAT_SWARM_IDLE, sprite_material("boom_swarm_idle"));
-    register_material(world, MAT_SWARM_HURT, hurt_material("boom_swarm_hurt"));
-    register_material(world, MAT_CASTER_IDLE, sprite_material("boom_caster_idle"));
-    register_material(world, MAT_CASTER_HURT, hurt_material("boom_caster_hurt"));
     register_material(world, MAT_FIREBALL, glow_material("boom_fireball"));
+    register_material(
+        world,
+        MAT_ROCKET,
+        glow_material_tinted("boom_rocket", [0.4, 0.7, 1.0]),
+    );
     register_material(world, MAT_MEDKIT, sprite_material("boom_medkit"));
     register_material(world, MAT_AMMO, sprite_material("boom_ammo"));
     register_material(world, MAT_EXIT, beacon_material(vec3(0.3, 1.8, 0.7), 5.0));
+    register_material(
+        world,
+        PAD_MATERIAL,
+        beacon_material(vec3(0.3, 1.4, 1.7), 4.0),
+    );
+    register_material(
+        world,
+        MARKER_PLAYER,
+        beacon_material(vec3(0.3, 1.7, 0.5), 4.0),
+    );
+    register_material(
+        world,
+        MARKER_ENEMY,
+        beacon_material(vec3(1.7, 0.3, 0.3), 4.0),
+    );
+    register_material(world, MAT_GHOST, ghost_material());
 
     register_billboard_mesh(world);
 }
@@ -122,6 +142,32 @@ fn register_material(world: &mut World, name: &str, material: Material) {
     }
 }
 
+/// Register an enemy's animated frames: each frame gets a normal sprite
+/// material and an emissive `_e` variant for elites, plus one shared hurt flash.
+fn register_animated(world: &mut World, key: &str, base: art::Sprite, hurt: art::Sprite) {
+    for index in 0..art::ANIM_FRAMES {
+        let texture = format!("boom_{key}_f{index}");
+        upload_sprite(world, &texture, art::frame(&base, index));
+        register_material(
+            world,
+            &format!("boom_mat_{key}_f{index}"),
+            sprite_material(&texture),
+        );
+        register_material(
+            world,
+            &format!("boom_mat_{key}_f{index}_e"),
+            hurt_material(&texture),
+        );
+    }
+    let hurt_texture = format!("boom_{key}_hurt");
+    upload_sprite(world, &hurt_texture, hurt);
+    register_material(
+        world,
+        &format!("boom_mat_{key}_hurt"),
+        hurt_material(&hurt_texture),
+    );
+}
+
 pub fn floor_material() -> Material {
     proto_material(FLOOR_TEXTURE, vec3(0.42, 0.40, 0.48), 0.92, 0.04, 6.0)
 }
@@ -140,6 +186,19 @@ pub fn pillar_material() -> Material {
 
 pub fn accent_material() -> Material {
     proto_material(ACCENT_TEXTURE, vec3(0.40, 0.60, 0.46), 0.7, 0.1, 2.0)
+}
+
+/// Translucent preview material for the editor's placement ghost.
+fn ghost_material() -> Material {
+    Material {
+        base_color: [0.4, 0.8, 1.0, 0.35],
+        emissive_factor: [0.3, 0.6, 0.9],
+        emissive_strength: 1.2,
+        alpha_mode: AlphaMode::Blend,
+        unlit: true,
+        double_sided: true,
+        ..Default::default()
+    }
 }
 
 /// Solid emissive material for glowing landmark beacons.
@@ -199,11 +258,15 @@ fn hurt_material(texture: &str) -> Material {
 }
 
 fn glow_material(texture: &str) -> Material {
+    glow_material_tinted(texture, [1.0, 0.6, 0.3])
+}
+
+fn glow_material_tinted(texture: &str, emissive: [f32; 3]) -> Material {
     Material {
         base_color: [1.0, 1.0, 1.0, 1.0],
         base_texture: Some(texture.to_string()),
         emissive_texture: Some(texture.to_string()),
-        emissive_factor: [1.0, 0.6, 0.3],
+        emissive_factor: emissive,
         emissive_strength: 5.0,
         alpha_mode: AlphaMode::Blend,
         unlit: true,

@@ -1,6 +1,6 @@
 use crate::ecs::{BoomerWorld, ENEMY, EnemyState, WeaponKind};
 use crate::systems::common::random_range;
-use crate::systems::world::{audio, enemies, fx};
+use crate::systems::world::{audio, enemies, fx, projectiles};
 use crate::tuning;
 use nalgebra_glm::{Vec3, Vec4, dot, vec4};
 use nightshade::ecs::input::queries::query_active_gamepad;
@@ -44,6 +44,17 @@ fn weapon_stats(kind: WeaponKind) -> WeaponStats {
             fov_pop: tuning::NAIL_FOV_POP,
             tracer: vec4(1.0, 2.2, 2.6, 1.0),
         },
+        WeaponKind::Rocket => WeaponStats {
+            pellets: 0,
+            spread: 0.0,
+            damage: tuning::ROCKET_DAMAGE,
+            cooldown: tuning::ROCKET_COOLDOWN,
+            knockback: tuning::ROCKET_KNOCKBACK,
+            shake: tuning::ROCKET_SHAKE,
+            kick: tuning::ROCKET_KICK,
+            fov_pop: tuning::ROCKET_FOV_POP,
+            tracer: vec4(0.4, 0.7, 1.0, 1.0),
+        },
     }
 }
 
@@ -71,16 +82,17 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
         return;
     }
 
-    if boomer_world.resources.weapon.ammo == 0 {
+    let kind = boomer_world.resources.weapon.current;
+
+    if boomer_world.resources.weapon.ammo(kind) == 0 {
         boomer_world.resources.weapon.cooldown = 0.2;
         audio::play(boomer_world, world, audio::EMPTY, 0.5);
         return;
     }
 
-    let kind = boomer_world.resources.weapon.current;
     let stats = weapon_stats(kind);
 
-    boomer_world.resources.weapon.ammo -= 1;
+    *boomer_world.resources.weapon.ammo_mut(kind) -= 1;
     boomer_world.resources.weapon.cooldown = stats.cooldown;
     boomer_world.resources.game.shake += stats.shake;
     boomer_world.resources.game.cam_kick += stats.kick;
@@ -88,6 +100,7 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
     let (sound, sound_volume) = match kind {
         WeaponKind::Shotgun => (audio::SHOTGUN, 0.9),
         WeaponKind::Nailgun => (audio::NAILGUN, 0.4),
+        WeaponKind::Rocket => (audio::ROCKET, 0.85),
     };
     audio::play(boomer_world, world, sound, sound_volume);
 
@@ -96,6 +109,11 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
     };
     let muzzle = origin + forward * 0.6 - up * 0.12 + right * 0.12;
     fx::muzzle(boomer_world, world, muzzle, forward);
+
+    if matches!(kind, WeaponKind::Rocket) {
+        projectiles::spawn_rocket(boomer_world, world, muzzle, forward);
+        return;
+    }
 
     let targets: Vec<(Entity, Vec3)> = boomer_world
         .query_entities(ENEMY)
@@ -203,10 +221,19 @@ fn switch_weapons(boomer_world: &mut BoomerWorld, world: &World) {
         boomer_world.resources.weapon.current = WeaponKind::Shotgun;
     } else if keyboard.just_pressed(KeyCode::Digit2) {
         boomer_world.resources.weapon.current = WeaponKind::Nailgun;
-    } else if dpad_up || dpad_down {
+    } else if keyboard.just_pressed(KeyCode::Digit3) {
+        boomer_world.resources.weapon.current = WeaponKind::Rocket;
+    } else if dpad_up {
         boomer_world.resources.weapon.current = match boomer_world.resources.weapon.current {
             WeaponKind::Shotgun => WeaponKind::Nailgun,
+            WeaponKind::Nailgun => WeaponKind::Rocket,
+            WeaponKind::Rocket => WeaponKind::Shotgun,
+        };
+    } else if dpad_down {
+        boomer_world.resources.weapon.current = match boomer_world.resources.weapon.current {
+            WeaponKind::Shotgun => WeaponKind::Rocket,
             WeaponKind::Nailgun => WeaponKind::Shotgun,
+            WeaponKind::Rocket => WeaponKind::Nailgun,
         };
     }
 }

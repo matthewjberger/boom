@@ -6,64 +6,159 @@ use nightshade::ecs::audio::systems::load_sound_from_bytes;
 use nightshade::ecs::world::commands::{EcsCommand, queue_ecs_command};
 use nightshade::prelude::*;
 
-const SOUND_TTL: f32 = 1.6;
+const SOUND_TTL: f32 = 3.0;
 
-pub const SHOTGUN: &str = "boom_shotgun";
-pub const NAILGUN: &str = "boom_nailgun";
-pub const EMPTY: &str = "boom_empty";
-pub const ENEMY_HURT: &str = "boom_enemy_hurt";
-pub const ENEMY_DEATH: &str = "boom_enemy_death";
-pub const PLAYER_HURT: &str = "boom_player_hurt";
-pub const PLAYER_DEATH: &str = "boom_player_death";
-pub const PICKUP: &str = "boom_pickup";
-pub const FIREBALL: &str = "boom_fireball";
-pub const DASH: &str = "boom_dash";
-pub const WAVE: &str = "boom_wave";
+// Each event is a round-robin set of clip keys; `play` cycles through them so
+// repeated sounds vary. All samples are from the se_old_pack00 sound pack.
+pub const SHOTGUN: &[&str] = &["sfx_gun00", "sfx_gun01", "sfx_gun02", "sfx_gun03"];
+pub const NAILGUN: &[&str] = &["sfx_kachi00", "sfx_kachi01", "sfx_kachi02", "sfx_kachi03"];
+pub const ROCKET: &[&str] = &["sfx_swing00", "sfx_swing01", "sfx_swing02"];
+pub const EXPLOSION: &[&str] = &["sfx_bom00", "sfx_bom01", "sfx_bom02", "sfx_bom03"];
+pub const EMPTY: &[&str] = &["sfx_cursor01", "sfx_cursor02", "sfx_cursor03"];
+pub const ENEMY_HURT: &[&str] = &["sfx_hit00", "sfx_hit01", "sfx_hit02", "sfx_hit03"];
+pub const ENEMY_DEATH: &[&str] = &["sfx_crash00", "sfx_crash01", "sfx_crash02", "sfx_crash03"];
+pub const PLAYER_HURT: &[&str] = &["sfx_don00", "sfx_don01", "sfx_don02"];
+pub const PLAYER_DEATH: &[&str] = &["sfx_gara00", "sfx_gara01", "sfx_gara02"];
+pub const PICKUP: &[&str] = &["sfx_coin00", "sfx_coin01", "sfx_coin02", "sfx_coin03"];
+pub const FIREBALL: &[&str] = &["sfx_fire00", "sfx_fire01", "sfx_fire02"];
+pub const DASH: &[&str] = &["sfx_push00", "sfx_push01", "sfx_push02"];
+pub const PAD: &[&str] = &["sfx_power00", "sfx_power02", "sfx_power03"];
 
 const CLIPS: &[(&str, &[u8])] = &[
+    ("sfx_gun00", include_bytes!("../../../assets/sfx/gun00.wav")),
+    ("sfx_gun01", include_bytes!("../../../assets/sfx/gun01.wav")),
+    ("sfx_gun02", include_bytes!("../../../assets/sfx/gun02.wav")),
+    ("sfx_gun03", include_bytes!("../../../assets/sfx/gun03.wav")),
     (
-        SHOTGUN,
-        include_bytes!("../../../assets/kenney/audio/build_thud_0.ogg"),
+        "sfx_kachi00",
+        include_bytes!("../../../assets/sfx/kachi00.wav"),
     ),
     (
-        NAILGUN,
-        include_bytes!("../../../assets/kenney/audio/build_clang_0.ogg"),
+        "sfx_kachi01",
+        include_bytes!("../../../assets/sfx/kachi01.wav"),
     ),
     (
-        EMPTY,
-        include_bytes!("../../../assets/kenney/audio/ui_click.ogg"),
+        "sfx_kachi02",
+        include_bytes!("../../../assets/sfx/kachi02.wav"),
     ),
     (
-        ENEMY_HURT,
-        include_bytes!("../../../assets/kenney/audio/orc_rustle.ogg"),
+        "sfx_kachi03",
+        include_bytes!("../../../assets/sfx/kachi03.wav"),
     ),
     (
-        ENEMY_DEATH,
-        include_bytes!("../../../assets/kenney/audio/build_thud_2.ogg"),
+        "sfx_swing00",
+        include_bytes!("../../../assets/sfx/swing00.wav"),
     ),
     (
-        PLAYER_HURT,
-        include_bytes!("../../../assets/kenney/audio/gate_creak.ogg"),
+        "sfx_swing01",
+        include_bytes!("../../../assets/sfx/swing01.wav"),
     ),
     (
-        PLAYER_DEATH,
-        include_bytes!("../../../assets/kenney/audio/build_thud_2.ogg"),
+        "sfx_swing02",
+        include_bytes!("../../../assets/sfx/swing02.wav"),
+    ),
+    ("sfx_bom00", include_bytes!("../../../assets/sfx/bom00.wav")),
+    ("sfx_bom01", include_bytes!("../../../assets/sfx/bom01.wav")),
+    ("sfx_bom02", include_bytes!("../../../assets/sfx/bom02.wav")),
+    ("sfx_bom03", include_bytes!("../../../assets/sfx/bom03.wav")),
+    (
+        "sfx_cursor01",
+        include_bytes!("../../../assets/sfx/cursor01.wav"),
     ),
     (
-        PICKUP,
-        include_bytes!("../../../assets/kenney/audio/coin_pickup.ogg"),
+        "sfx_cursor02",
+        include_bytes!("../../../assets/sfx/cursor02.wav"),
     ),
     (
-        FIREBALL,
-        include_bytes!("../../../assets/kenney/audio/ui_hover.ogg"),
+        "sfx_cursor03",
+        include_bytes!("../../../assets/sfx/cursor03.wav"),
+    ),
+    ("sfx_hit00", include_bytes!("../../../assets/sfx/hit00.wav")),
+    ("sfx_hit01", include_bytes!("../../../assets/sfx/hit01.wav")),
+    ("sfx_hit02", include_bytes!("../../../assets/sfx/hit02.wav")),
+    ("sfx_hit03", include_bytes!("../../../assets/sfx/hit03.wav")),
+    (
+        "sfx_crash00",
+        include_bytes!("../../../assets/sfx/crash00.wav"),
     ),
     (
-        DASH,
-        include_bytes!("../../../assets/kenney/audio/ui_hover.ogg"),
+        "sfx_crash01",
+        include_bytes!("../../../assets/sfx/crash01.wav"),
     ),
     (
-        WAVE,
-        include_bytes!("../../../assets/kenney/audio/gate_creak.ogg"),
+        "sfx_crash02",
+        include_bytes!("../../../assets/sfx/crash02.wav"),
+    ),
+    (
+        "sfx_crash03",
+        include_bytes!("../../../assets/sfx/crash03.wav"),
+    ),
+    ("sfx_don00", include_bytes!("../../../assets/sfx/don00.wav")),
+    ("sfx_don01", include_bytes!("../../../assets/sfx/don01.wav")),
+    ("sfx_don02", include_bytes!("../../../assets/sfx/don02.wav")),
+    (
+        "sfx_gara00",
+        include_bytes!("../../../assets/sfx/gara00.wav"),
+    ),
+    (
+        "sfx_gara01",
+        include_bytes!("../../../assets/sfx/gara01.wav"),
+    ),
+    (
+        "sfx_gara02",
+        include_bytes!("../../../assets/sfx/gara02.wav"),
+    ),
+    (
+        "sfx_coin00",
+        include_bytes!("../../../assets/sfx/coin00.wav"),
+    ),
+    (
+        "sfx_coin01",
+        include_bytes!("../../../assets/sfx/coin01.wav"),
+    ),
+    (
+        "sfx_coin02",
+        include_bytes!("../../../assets/sfx/coin02.wav"),
+    ),
+    (
+        "sfx_coin03",
+        include_bytes!("../../../assets/sfx/coin03.wav"),
+    ),
+    (
+        "sfx_fire00",
+        include_bytes!("../../../assets/sfx/fire00.wav"),
+    ),
+    (
+        "sfx_fire01",
+        include_bytes!("../../../assets/sfx/fire01.wav"),
+    ),
+    (
+        "sfx_fire02",
+        include_bytes!("../../../assets/sfx/fire02.wav"),
+    ),
+    (
+        "sfx_push00",
+        include_bytes!("../../../assets/sfx/push00.wav"),
+    ),
+    (
+        "sfx_push01",
+        include_bytes!("../../../assets/sfx/push01.wav"),
+    ),
+    (
+        "sfx_push02",
+        include_bytes!("../../../assets/sfx/push02.wav"),
+    ),
+    (
+        "sfx_power00",
+        include_bytes!("../../../assets/sfx/power00.wav"),
+    ),
+    (
+        "sfx_power02",
+        include_bytes!("../../../assets/sfx/power02.wav"),
+    ),
+    (
+        "sfx_power03",
+        include_bytes!("../../../assets/sfx/power03.wav"),
     ),
 ];
 
@@ -78,8 +173,23 @@ pub fn load(world: &mut World) {
     }
 }
 
-pub fn play(boomer_world: &mut BoomerWorld, world: &mut World, key: &str, volume: f32) {
-    let pitch = 0.93 + next_random(&mut boomer_world.resources.game.random_state) * 0.14;
+pub fn play(boomer_world: &mut BoomerWorld, world: &mut World, set: &[&'static str], volume: f32) {
+    if set.is_empty() {
+        return;
+    }
+    let index = {
+        let counter = boomer_world
+            .resources
+            .audio
+            .round_robin
+            .entry(set[0])
+            .or_insert(0);
+        let current = *counter;
+        *counter = counter.wrapping_add(1);
+        current
+    };
+    let key = set[index % set.len()];
+    let pitch = 0.94 + next_random(&mut boomer_world.resources.game.random_state) * 0.12;
     let entity = spawn_entities(
         world,
         NAME | LOCAL_TRANSFORM | GLOBAL_TRANSFORM | AUDIO_SOURCE,

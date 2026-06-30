@@ -1,4 +1,6 @@
-use crate::ecs::{BoomerWorld, ENGINE_ENTITY, EngineEntity, PICKUP, Pickup, PickupKind};
+use crate::ecs::{
+    BoomerWorld, ENGINE_ENTITY, EngineEntity, PICKUP, Pickup, PickupKind, WeaponState,
+};
 use crate::systems::common::next_random;
 use crate::systems::world::textures::{MAT_AMMO, MAT_MEDKIT};
 use crate::systems::world::{audio, billboard, fx, player};
@@ -24,8 +26,9 @@ pub fn spawn_initial(boomer_world: &mut BoomerWorld, world: &mut World) {
 pub fn maybe_drop(boomer_world: &mut BoomerWorld, world: &mut World, position: Vec3) {
     let health_fraction =
         boomer_world.resources.stats.health / boomer_world.resources.stats.max_health;
-    let ammo_fraction =
-        boomer_world.resources.weapon.ammo as f32 / boomer_world.resources.weapon.max_ammo as f32;
+    let current = boomer_world.resources.weapon.current;
+    let ammo_fraction = boomer_world.resources.weapon.ammo(current) as f32
+        / WeaponState::max_ammo(current).max(1) as f32;
     let roll = next_random(&mut boomer_world.resources.game.random_state);
 
     let kind = if health_fraction < 0.5 && roll < 0.32 {
@@ -88,7 +91,10 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
                 boomer_world.resources.stats.health < boomer_world.resources.stats.max_health
             }
             PickupKind::Ammo => {
-                boomer_world.resources.weapon.ammo < boomer_world.resources.weapon.max_ammo
+                let weapon = &boomer_world.resources.weapon;
+                weapon.shells < tuning::SHOTGUN_MAX
+                    || weapon.nails < tuning::NAIL_MAX
+                    || weapon.rockets < tuning::ROCKET_MAX
             }
         };
 
@@ -107,9 +113,10 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
                     (boomer_world.resources.stats.health + tuning::HEALTH_PICKUP_AMOUNT).min(max);
             }
             PickupKind::Ammo => {
-                let max = boomer_world.resources.weapon.max_ammo;
-                boomer_world.resources.weapon.ammo =
-                    (boomer_world.resources.weapon.ammo + tuning::AMMO_PICKUP_AMOUNT).min(max);
+                let weapon = &mut boomer_world.resources.weapon;
+                weapon.shells = (weapon.shells + tuning::SHOTGUN_PICKUP).min(tuning::SHOTGUN_MAX);
+                weapon.nails = (weapon.nails + tuning::NAIL_PICKUP).min(tuning::NAIL_MAX);
+                weapon.rockets = (weapon.rockets + tuning::ROCKET_PICKUP).min(tuning::ROCKET_MAX);
             }
         }
         let color = match kind {

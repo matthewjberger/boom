@@ -3,6 +3,9 @@ use crate::tuning;
 use nalgebra_glm::Vec3;
 use nightshade::prelude::Entity;
 
+/// A queued spawn: which enemy kind, and whether it is an elite variant.
+pub type SpawnEntry = (EnemyKind, bool);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Screen {
     #[default]
@@ -10,6 +13,7 @@ pub enum Screen {
     LevelSelect,
     InGame,
     Paused,
+    Editor,
 }
 
 #[derive(Default)]
@@ -32,6 +36,7 @@ pub enum WeaponKind {
     #[default]
     Shotgun,
     Nailgun,
+    Rocket,
 }
 
 impl WeaponKind {
@@ -39,25 +44,56 @@ impl WeaponKind {
         match self {
             WeaponKind::Shotgun => "SHOTGUN",
             WeaponKind::Nailgun => "NAILGUN",
+            WeaponKind::Rocket => "ROCKET",
         }
     }
 }
 
+/// Each weapon draws from its own ammo pool, so weapon choice is a real
+/// resource decision rather than a shared spread-pattern toggle.
 pub struct WeaponState {
     pub current: WeaponKind,
-    pub ammo: u32,
-    pub max_ammo: u32,
+    pub shells: u32,
+    pub nails: u32,
+    pub rockets: u32,
     pub cooldown: f32,
     /// Brief crosshair kick when a shot lands.
     pub hit_marker: f32,
+}
+
+impl WeaponState {
+    pub fn ammo(&self, kind: WeaponKind) -> u32 {
+        match kind {
+            WeaponKind::Shotgun => self.shells,
+            WeaponKind::Nailgun => self.nails,
+            WeaponKind::Rocket => self.rockets,
+        }
+    }
+
+    pub fn ammo_mut(&mut self, kind: WeaponKind) -> &mut u32 {
+        match kind {
+            WeaponKind::Shotgun => &mut self.shells,
+            WeaponKind::Nailgun => &mut self.nails,
+            WeaponKind::Rocket => &mut self.rockets,
+        }
+    }
+
+    pub fn max_ammo(kind: WeaponKind) -> u32 {
+        match kind {
+            WeaponKind::Shotgun => tuning::SHOTGUN_MAX,
+            WeaponKind::Nailgun => tuning::NAIL_MAX,
+            WeaponKind::Rocket => tuning::ROCKET_MAX,
+        }
+    }
 }
 
 impl Default for WeaponState {
     fn default() -> Self {
         Self {
             current: WeaponKind::Shotgun,
-            ammo: tuning::START_AMMO,
-            max_ammo: tuning::MAX_AMMO,
+            shells: tuning::SHOTGUN_START,
+            nails: tuning::NAIL_START,
+            rockets: tuning::ROCKET_START,
             cooldown: 0.0,
             hit_marker: 0.0,
         }
@@ -72,8 +108,8 @@ pub struct PlayerStats {
 impl Default for PlayerStats {
     fn default() -> Self {
         Self {
-            health: 100.0,
-            max_health: 100.0,
+            health: tuning::MAX_HEALTH,
+            max_health: tuning::MAX_HEALTH,
         }
     }
 }
@@ -99,7 +135,12 @@ pub struct GameState {
     pub fov_pop: f32,
     pub hitstop: f32,
     pub spawn_timer: f32,
-    pub spawn_queue: Vec<EnemyKind>,
+    pub spawn_queue: Vec<SpawnEntry>,
+    /// Remaining waves for this level, popped front to back as each clears.
+    pub waves: Vec<Vec<SpawnEntry>>,
+    /// Seconds since the last kill; feeds the anti-camping pressure build-up.
+    pub since_kill: f32,
+    pub pressure: f32,
     pub random_state: u64,
     pub seeded: bool,
 }
@@ -108,20 +149,48 @@ pub struct GameState {
 pub struct LevelState {
     pub index: usize,
     pub cycle: u32,
+    pub wave: u32,
+    pub wave_count: u32,
+    pub pads: Vec<Vec3>,
     pub geometry: Vec<Entity>,
     pub exit_entity: Option<Entity>,
     pub exit_position: Vec3,
     pub exit_active: bool,
     pub banner: f32,
+    /// True while playing a level authored in the editor (single level, its own
+    /// spawn points, and the exit returns to the editor rather than cycling).
+    pub custom: bool,
+    pub custom_spawns: Vec<(f32, f32)>,
 }
 
-/// A travelling enemy fireball. Linked to a billboard render entity.
+/// In-editor authoring state: the level being built, its live preview entities,
+/// the current brush, and the placement cursor.
+#[derive(Default)]
+pub struct EditorState {
+    pub active: bool,
+    pub data: crate::content::LevelData,
+    pub block_entities: Vec<Entity>,
+    pub markers: Vec<Entity>,
+    pub ghost: Option<Entity>,
+    pub brush: crate::content::BlockKind,
+    pub place_height: f32,
+    pub cursor: Vec3,
+    pub status: f32,
+    pub status_text: String,
+}
+
+/// A travelling projectile linked to a billboard render entity. Enemy
+/// fireballs hurt the player; player rockets explode and hurt enemies.
 pub struct Projectile {
     pub entity: Entity,
     pub position: Vec3,
     pub velocity: Vec3,
     pub lifetime: f32,
     pub damage: f32,
+    /// True for enemy fireballs (damage the player), false for player rockets.
+    pub hostile: bool,
+    /// Blast radius for area damage on impact; 0 means a direct hit only.
+    pub splash_radius: f32,
 }
 
 #[derive(Default)]
@@ -139,6 +208,7 @@ pub struct TransientState {
 #[derive(Default)]
 pub struct AudioPool {
     pub sources: Vec<(Entity, f32)>,
+    pub round_robin: std::collections::HashMap<&'static str, usize>,
 }
 
 #[derive(Default)]
@@ -146,6 +216,7 @@ pub struct TitleHandles {
     pub root: Entity,
     pub play_button: Entity,
     pub level_select_button: Entity,
+    pub editor_button: Entity,
     pub quit_button: Entity,
 }
 
@@ -171,6 +242,7 @@ pub struct HudHandles {
     pub health_label: Entity,
     pub ammo_label: Entity,
     pub weapon_label: Entity,
+    pub ammo_rack: Entity,
     pub wave_label: Entity,
     pub score_label: Entity,
     pub combo_label: Entity,
@@ -181,10 +253,17 @@ pub struct HudHandles {
     pub low_health_overlay: Entity,
 }
 
+#[derive(Default, Clone, Copy)]
+pub struct EditorHandles {
+    pub root: Entity,
+    pub status: Entity,
+}
+
 #[derive(Default)]
 pub struct UiHandles {
     pub title: TitleHandles,
     pub level_select: LevelSelectHandles,
     pub pause: PauseHandles,
     pub hud: HudHandles,
+    pub editor: EditorHandles,
 }

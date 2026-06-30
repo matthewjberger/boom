@@ -20,6 +20,11 @@ impl State for Boomer {
         systems::screens::level_select::handle_input(&mut self.boomer_world, world);
         systems::screens::pause::handle_input(&mut self.boomer_world, world);
 
+        if matches!(self.boomer_world.resources.screen.current, Screen::Editor) {
+            systems::editor::update(&mut self.boomer_world, world);
+            systems::world::fx::tick(&mut self.boomer_world, world);
+        }
+
         if matches!(self.boomer_world.resources.screen.current, Screen::InGame) {
             let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
             let playing = matches!(self.boomer_world.resources.game.phase, Phase::Playing);

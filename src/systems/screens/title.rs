@@ -16,6 +16,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
 
     let mut play_button = Entity::default();
     let mut level_select_button = Entity::default();
+    let mut editor_button = Entity::default();
     let mut quit_button = Entity::default();
 
     tree.in_parent(root, |tree| {
@@ -52,7 +53,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
             .add_node()
             .window(
                 Rl(vec2(50.0, 100.0)) + Ab(vec2(0.0, -96.0)),
-                Ab(vec2(MENU_BUTTON_SIZE.x, 176.0)),
+                Ab(vec2(MENU_BUTTON_SIZE.x, 224.0)),
                 Anchor::BottomCenter,
             )
             .flow(FlowDirection::Vertical, 8.0, 8.0)
@@ -60,6 +61,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
         tree.in_parent(menu_column, |tree| {
             play_button = menu_button::build(tree, "PLAY");
             level_select_button = menu_button::build(tree, "SELECT LEVEL");
+            editor_button = menu_button::build(tree, "LEVEL EDITOR");
             quit_button = menu_button::build(tree, "QUIT");
         });
 
@@ -70,7 +72,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
                 Anchor::Center,
             )
             .with_text(
-                "MOVE WASD  /  SHOOT LMB  /  DASH CTRL  /  JUMP SPACE  /  WEAPONS 1-2  /  SPRINT SHIFT  /  PAUSE ESC  (full gamepad support)",
+                "MOVE WASD  /  SHOOT LMB  /  DASH CTRL  /  STRAFE-JUMP SPACE  /  WEAPONS 1-3  /  ROCKET-JUMP DOWN+3  /  PAUSE ESC  (full gamepad support)",
                 12.0,
             )
             .text_center()
@@ -82,6 +84,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
         root,
         play_button,
         level_select_button,
+        editor_button,
         quit_button,
     }
 }
@@ -92,15 +95,19 @@ pub fn handle_input(boomer_world: &mut BoomerWorld, world: &mut World) {
     }
     let play = boomer_world.resources.ui_handles.title.play_button;
     let level_select = boomer_world.resources.ui_handles.title.level_select_button;
+    let editor = boomer_world.resources.ui_handles.title.editor_button;
     let quit = boomer_world.resources.ui_handles.title.quit_button;
     let mut clicked_play = false;
     let mut clicked_level_select = false;
+    let mut clicked_editor = false;
     let mut clicked_quit = false;
     for entity in ui_button_clicks(world) {
         if entity == play {
             clicked_play = true;
         } else if entity == level_select {
             clicked_level_select = true;
+        } else if entity == editor {
+            clicked_editor = true;
         } else if entity == quit {
             clicked_quit = true;
         }
@@ -109,6 +116,8 @@ pub fn handle_input(boomer_world: &mut BoomerWorld, world: &mut World) {
         lifecycle::enter(boomer_world, world, Screen::InGame);
     } else if clicked_level_select {
         lifecycle::enter(boomer_world, world, Screen::LevelSelect);
+    } else if clicked_editor {
+        crate::systems::editor::open(boomer_world, world);
     } else if clicked_quit {
         world.resources.window.should_exit = true;
     }

@@ -35,12 +35,25 @@ pub fn handle_global(boomer_world: &mut BoomerWorld, world: &mut World) {
             if escape || start {
                 lifecycle::enter(boomer_world, world, Screen::Paused);
             } else if restart || (confirm && !matches!(phase, Phase::Playing)) {
-                game::start_at(boomer_world, world, 0);
+                if boomer_world.resources.level.custom {
+                    game::start_custom(boomer_world, world);
+                    lifecycle::enter(boomer_world, world, Screen::InGame);
+                } else {
+                    game::start_at(boomer_world, world, 0);
+                }
             }
         }
         Screen::Paused => {
             if escape || start {
                 lifecycle::enter(boomer_world, world, Screen::InGame);
+            }
+        }
+        Screen::Editor => {
+            if escape {
+                crate::systems::editor::teardown(boomer_world, world);
+                boomer_world.resources.editor.active = false;
+                game::start_at(boomer_world, world, 0);
+                lifecycle::enter(boomer_world, world, Screen::Title);
             }
         }
     }

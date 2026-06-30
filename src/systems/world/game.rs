@@ -1,6 +1,6 @@
 use crate::content;
-use crate::ecs::{BoomerWorld, EnemyKind, Phase};
-use crate::systems::common::{combo_multiplier, random_range};
+use crate::ecs::{BoomerWorld, EnemyKind, Phase, SpawnEntry};
+use crate::systems::common::{combo_multiplier, next_random, random_range};
 use crate::systems::world::{audio, enemies, level, pickups, player, projectiles};
 use crate::tuning;
 use nalgebra_glm::vec3;
@@ -10,24 +10,31 @@ const POST_HIT_IFRAMES: f32 = 0.25;
 const DEATH_SHAKE: f32 = 1.2;
 const EXIT_RADIUS: f32 = 2.8;
 const BANNER_TIME: f32 = 2.4;
+const BEST_SCORE_PATH: &str = "boom_best.txt";
 
 pub fn start_at(boomer_world: &mut BoomerWorld, world: &mut World, absolute_index: usize) {
     if !boomer_world.resources.game.seeded {
         let uptime = world.resources.window.timing.uptime_milliseconds;
         boomer_world.resources.game.random_state = 0x9e37_79b9_7f4a_7c15 ^ (uptime | 1);
+        boomer_world.resources.game.best_score = load_best();
         boomer_world.resources.game.seeded = true;
     }
     reset_core(boomer_world);
     load_level(boomer_world, world, absolute_index);
 }
 
-pub fn load_level(boomer_world: &mut BoomerWorld, world: &mut World, absolute_index: usize) {
+pub fn teardown_world(boomer_world: &mut BoomerWorld, world: &mut World) {
     enemies::despawn_all(boomer_world, world);
     pickups::despawn_all(boomer_world, world);
     projectiles::despawn_all(boomer_world, world);
     level::despawn(boomer_world, world);
+}
+
+pub fn load_level(boomer_world: &mut BoomerWorld, world: &mut World, absolute_index: usize) {
+    teardown_world(boomer_world, world);
 
     let count = content::count();
+    boomer_world.resources.level.custom = false;
     boomer_world.resources.level.index = absolute_index % count;
     boomer_world.resources.level.cycle = (absolute_index / count) as u32;
     boomer_world.resources.level.banner = BANNER_TIME;
@@ -42,24 +49,123 @@ pub fn load_level(boomer_world: &mut BoomerWorld, world: &mut World, absolute_in
     );
     player::teleport(boomer_world, world, spawn);
 
-    let scale = 1.0 + boomer_world.resources.level.cycle as f32 * 0.5;
+    let cycle = boomer_world.resources.level.cycle;
+    let scale = 1.0 + cycle as f32 * 0.5;
     let imps = (definition.roster.imps as f32 * scale).round() as u32;
     let swarmers = (definition.roster.swarmers as f32 * scale).round() as u32;
     let casters = (definition.roster.casters as f32 * scale).round() as u32;
-    boomer_world.resources.game.spawn_queue = build_queue(imps, swarmers, casters);
+    let brutes = (definition.roster.brutes as f32 * scale).round() as u32;
+    let gargoyles = (definition.roster.gargoyles as f32 * scale).round() as u32;
+    let mut waves = build_waves(
+        boomer_world,
+        imps,
+        swarmers,
+        casters,
+        brutes,
+        gargoyles,
+        cycle,
+    );
+
+    let first = if waves.is_empty() {
+        Vec::new()
+    } else {
+        waves.remove(0)
+    };
+    boomer_world.resources.game.waves = waves;
+    boomer_world.resources.game.spawn_queue = first;
     boomer_world.resources.game.spawn_timer = 0.6;
+    boomer_world.resources.level.wave = 1;
+    boomer_world.resources.level.wave_count = tuning::WAVES_PER_LEVEL as u32;
 
     pickups::spawn_initial(boomer_world, world);
-    audio::play(boomer_world, world, audio::WAVE, 0.7);
+}
+
+const DEFAULT_SPAWNS: &[(f32, f32)] = &[
+    (16.0, 0.0),
+    (-16.0, 0.0),
+    (0.0, 16.0),
+    (0.0, -16.0),
+    (12.0, 12.0),
+    (-12.0, -12.0),
+];
+
+/// Start a play session from the editor's authored level.
+pub fn start_custom(boomer_world: &mut BoomerWorld, world: &mut World) {
+    if !boomer_world.resources.game.seeded {
+        let uptime = world.resources.window.timing.uptime_milliseconds;
+        boomer_world.resources.game.random_state = 0x9e37_79b9_7f4a_7c15 ^ (uptime | 1);
+        boomer_world.resources.game.best_score = load_best();
+        boomer_world.resources.game.seeded = true;
+    }
+    reset_core(boomer_world);
+    teardown_world(boomer_world, world);
+
+    let data = boomer_world.resources.editor.data.clone();
+    boomer_world.resources.level.custom = true;
+    boomer_world.resources.level.index = 0;
+    boomer_world.resources.level.cycle = 0;
+    boomer_world.resources.level.banner = BANNER_TIME;
+    boomer_world.resources.level.custom_spawns = if data.spawn_points.is_empty() {
+        DEFAULT_SPAWNS.to_vec()
+    } else {
+        data.spawn_points.clone()
+    };
+
+    level::build_dynamic(boomer_world, world, &data);
+    let spawn = vec3(data.spawn[0], data.spawn[1], data.spawn[2]);
+    player::teleport(boomer_world, world, spawn);
+
+    let roster = data.roster;
+    let mut waves = build_waves(
+        boomer_world,
+        roster.imps,
+        roster.swarmers,
+        roster.casters,
+        roster.brutes,
+        roster.gargoyles,
+        0,
+    );
+    let first = if waves.is_empty() {
+        Vec::new()
+    } else {
+        waves.remove(0)
+    };
+    boomer_world.resources.game.waves = waves;
+    boomer_world.resources.game.spawn_queue = first;
+    boomer_world.resources.game.spawn_timer = 0.6;
+    boomer_world.resources.level.wave = 1;
+    boomer_world.resources.level.wave_count = tuning::WAVES_PER_LEVEL as u32;
+
+    pickups::spawn_initial(boomer_world, world);
 }
 
 pub fn award(boomer_world: &mut BoomerWorld, base: u32) {
-    let game = &mut boomer_world.resources.game;
-    game.combo += 1;
-    game.combo_timer = tuning::COMBO_WINDOW;
-    let multiplier = combo_multiplier(game.combo);
-    game.score += base * multiplier;
-    game.score_flash = tuning::SCORE_FLASH_TIME;
+    let before = combo_multiplier(boomer_world.resources.game.combo);
+    {
+        let game = &mut boomer_world.resources.game;
+        game.combo += 1;
+        game.combo_timer = tuning::COMBO_WINDOW;
+        game.since_kill = 0.0;
+        game.pressure = (game.pressure - 1.0).max(0.0);
+        let multiplier = combo_multiplier(game.combo);
+        game.score += base * multiplier;
+        game.score_flash = tuning::SCORE_FLASH_TIME;
+    }
+    if combo_multiplier(boomer_world.resources.game.combo) > before {
+        grant_combo_reward(boomer_world);
+    }
+}
+
+/// Stepping up the combo multiplier pays out overheal and ammo, so a hot
+/// streak directly sustains the offense that earned it.
+fn grant_combo_reward(boomer_world: &mut BoomerWorld) {
+    let stats = &mut boomer_world.resources.stats;
+    stats.health = (stats.health + tuning::COMBO_REWARD_HEAL).min(tuning::OVERHEAL_MAX);
+    let weapon = &mut boomer_world.resources.weapon;
+    weapon.shells = (weapon.shells + tuning::COMBO_REWARD_SHELLS).min(tuning::SHOTGUN_MAX);
+    weapon.nails = (weapon.nails + tuning::COMBO_REWARD_NAILS).min(tuning::NAIL_MAX);
+    weapon.rockets = (weapon.rockets + tuning::COMBO_REWARD_ROCKETS).min(tuning::ROCKET_MAX);
+    boomer_world.resources.game.score_flash = tuning::SCORE_FLASH_TIME;
 }
 
 pub fn damage_player(boomer_world: &mut BoomerWorld, world: &mut World, amount: f32) {
@@ -85,11 +191,15 @@ pub fn damage_player(boomer_world: &mut BoomerWorld, world: &mut World, amount: 
         boomer_world.resources.stats.health = 0.0;
         boomer_world.resources.game.phase = Phase::Dead;
         boomer_world.resources.game.shake += DEATH_SHAKE;
-        boomer_world.resources.game.best_score = boomer_world
+        let best = boomer_world
             .resources
             .game
             .best_score
             .max(boomer_world.resources.game.score);
+        if best > boomer_world.resources.game.best_score {
+            save_best(best);
+        }
+        boomer_world.resources.game.best_score = best;
         audio::play(boomer_world, world, audio::PLAYER_DEATH, 1.0);
     }
 }
@@ -97,32 +207,32 @@ pub fn damage_player(boomer_world: &mut BoomerWorld, world: &mut World, amount: 
 pub fn tick(boomer_world: &mut BoomerWorld, world: &mut World) {
     let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
 
-    let game = &mut boomer_world.resources.game;
-    game.score_flash = (game.score_flash - delta).max(0.0);
-    if game.combo_timer > 0.0 {
-        game.combo_timer -= delta;
-        if game.combo_timer <= 0.0 {
-            game.combo = 0;
+    {
+        let game = &mut boomer_world.resources.game;
+        game.score_flash = (game.score_flash - delta).max(0.0);
+        if game.combo_timer > 0.0 {
+            game.combo_timer -= delta;
+            if game.combo_timer <= 0.0 {
+                game.combo = 0;
+            }
         }
     }
     boomer_world.resources.level.banner = (boomer_world.resources.level.banner - delta).max(0.0);
 
+    decay_overheal(boomer_world, delta);
+    apply_pressure(boomer_world, world, delta);
+
     if !boomer_world.resources.game.spawn_queue.is_empty() {
         boomer_world.resources.game.spawn_timer -= delta;
         if boomer_world.resources.game.spawn_timer <= 0.0 {
-            if let Some(kind) = boomer_world.resources.game.spawn_queue.pop() {
+            if let Some((kind, elite)) = boomer_world.resources.game.spawn_queue.pop() {
                 let position = spawn_point(boomer_world);
-                enemies::spawn(boomer_world, world, kind, position);
+                enemies::spawn(boomer_world, world, kind, elite, position);
             }
-            let interval = (tuning::SPAWN_INTERVAL
-                - boomer_world.resources.level.cycle as f32 * 0.05)
-                .max(tuning::SPAWN_INTERVAL_MIN);
-            boomer_world.resources.game.spawn_timer = interval;
+            boomer_world.resources.game.spawn_timer = spawn_interval(boomer_world);
         }
-    } else if enemies::total_count(boomer_world) == 0 && !boomer_world.resources.level.exit_active {
-        level::open_exit(boomer_world, world);
-        boomer_world.resources.level.banner = BANNER_TIME;
-        audio::play(boomer_world, world, audio::WAVE, 0.7);
+    } else if enemies::total_count(boomer_world) == 0 {
+        advance_wave(boomer_world, world);
     }
 
     if boomer_world.resources.level.exit_active {
@@ -130,40 +240,133 @@ pub fn tick(boomer_world: &mut BoomerWorld, world: &mut World) {
         let mut offset = player_position - boomer_world.resources.level.exit_position;
         offset.y = 0.0;
         if offset.norm() < EXIT_RADIUS {
-            let next = boomer_world.resources.level.cycle as usize * content::count()
-                + boomer_world.resources.level.index
-                + 1;
-            load_level(boomer_world, world, next);
+            if boomer_world.resources.level.custom {
+                crate::systems::editor::open(boomer_world, world);
+            } else {
+                let next = boomer_world.resources.level.cycle as usize * content::count()
+                    + boomer_world.resources.level.index
+                    + 1;
+                load_level(boomer_world, world, next);
+            }
         }
     }
+}
+
+fn advance_wave(boomer_world: &mut BoomerWorld, world: &mut World) {
+    if !boomer_world.resources.game.waves.is_empty() {
+        let wave = boomer_world.resources.game.waves.remove(0);
+        boomer_world.resources.game.spawn_queue = wave;
+        boomer_world.resources.game.spawn_timer = 0.6;
+        boomer_world.resources.level.wave += 1;
+        boomer_world.resources.level.banner = BANNER_TIME;
+    } else if !boomer_world.resources.level.exit_active {
+        level::open_exit(boomer_world, world);
+        boomer_world.resources.level.banner = BANNER_TIME;
+    }
+}
+
+fn decay_overheal(boomer_world: &mut BoomerWorld, delta: f32) {
+    let stats = &mut boomer_world.resources.stats;
+    if stats.health > stats.max_health {
+        stats.health = (stats.health - tuning::OVERHEAL_DECAY * delta).max(stats.max_health);
+    }
+}
+
+/// Camp with enemies alive and pressure builds until the horde reinforces,
+/// nudging the player to keep pushing rather than turtle in a corner.
+fn apply_pressure(boomer_world: &mut BoomerWorld, world: &mut World, delta: f32) {
+    boomer_world.resources.game.since_kill += delta;
+    let enemies_alive = enemies::total_count(boomer_world) > 0;
+    let camping = enemies_alive && boomer_world.resources.game.since_kill > tuning::PRESSURE_GRACE;
+    if !camping {
+        return;
+    }
+    boomer_world.resources.game.pressure += tuning::PRESSURE_BUILD * delta;
+    if boomer_world.resources.game.pressure >= tuning::PRESSURE_SPAWN_AT {
+        boomer_world.resources.game.pressure = 0.0;
+        boomer_world.resources.game.shake += 0.3;
+        let position = spawn_point(boomer_world);
+        enemies::spawn(boomer_world, world, EnemyKind::Swarmer, false, position);
+    }
+}
+
+fn spawn_interval(boomer_world: &BoomerWorld) -> f32 {
+    let cycle = boomer_world.resources.level.cycle as f32;
+    let wave = boomer_world.resources.level.wave as f32;
+    (tuning::SPAWN_INTERVAL - cycle * 0.05 - wave * 0.06).max(tuning::SPAWN_INTERVAL_MIN)
 }
 
 fn spawn_point(boomer_world: &mut BoomerWorld) -> nalgebra_glm::Vec3 {
-    let points = content::level(boomer_world.resources.level.index).spawn_points;
-    let pick = random_range(
+    let custom = boomer_world.resources.level.custom;
+    let len = if custom {
+        boomer_world.resources.level.custom_spawns.len()
+    } else {
+        content::level(boomer_world.resources.level.index)
+            .spawn_points
+            .len()
+    };
+    if len == 0 {
+        return vec3(0.0, 0.0, 16.0);
+    }
+    let pick = (random_range(
         &mut boomer_world.resources.game.random_state,
         0.0,
-        points.len() as f32,
-    ) as usize;
-    let (x, z) = points[pick.min(points.len() - 1)];
+        len as f32,
+    ) as usize)
+        .min(len - 1);
+    let (x, z) = if custom {
+        boomer_world.resources.level.custom_spawns[pick]
+    } else {
+        content::level(boomer_world.resources.level.index).spawn_points[pick]
+    };
     vec3(x, 0.0, z)
 }
 
-fn build_queue(imps: u32, swarmers: u32, casters: u32) -> Vec<EnemyKind> {
-    let max = imps.max(swarmers).max(casters);
-    let mut queue = Vec::new();
-    for index in 0..max {
-        if index < casters {
-            queue.push(EnemyKind::Caster);
-        }
-        if index < swarmers {
-            queue.push(EnemyKind::Swarmer);
-        }
-        if index < imps {
-            queue.push(EnemyKind::Imp);
-        }
+fn elite_fraction(cycle: u32) -> f32 {
+    (cycle as f32 * 0.18).min(0.6)
+}
+
+/// Split the level roster into escalating waves. Fodder spreads across waves
+/// for a swelling cadence; brutes anchor the final wave as a mini-boss cap.
+fn build_waves(
+    boomer_world: &mut BoomerWorld,
+    imps: u32,
+    swarmers: u32,
+    casters: u32,
+    brutes: u32,
+    gargoyles: u32,
+    cycle: u32,
+) -> Vec<Vec<SpawnEntry>> {
+    let fraction = elite_fraction(cycle);
+    let count = tuning::WAVES_PER_LEVEL.max(1);
+    let mut waves: Vec<Vec<SpawnEntry>> = (0..count).map(|_| Vec::new()).collect();
+    let mut cursor = 0usize;
+
+    for _ in 0..imps {
+        let elite = next_random(&mut boomer_world.resources.game.random_state) < fraction;
+        waves[cursor % count].push((EnemyKind::Imp, elite));
+        cursor += 1;
     }
-    queue
+    for _ in 0..swarmers {
+        waves[cursor % count].push((EnemyKind::Swarmer, false));
+        cursor += 1;
+    }
+    for _ in 0..casters {
+        let elite = next_random(&mut boomer_world.resources.game.random_state) < fraction;
+        waves[cursor % count].push((EnemyKind::Caster, elite));
+        cursor += 1;
+    }
+    for _ in 0..gargoyles {
+        let elite = next_random(&mut boomer_world.resources.game.random_state) < fraction;
+        waves[cursor % count].push((EnemyKind::Gargoyle, elite));
+        cursor += 1;
+    }
+    let last = count - 1;
+    for _ in 0..brutes {
+        let elite = next_random(&mut boomer_world.resources.game.random_state) < fraction;
+        waves[last].push((EnemyKind::Brute, elite));
+    }
+    waves
 }
 
 fn reset_core(boomer_world: &mut BoomerWorld) {
@@ -178,4 +381,15 @@ fn reset_core(boomer_world: &mut BoomerWorld) {
     boomer_world.resources.player.dash_timer = 0.0;
     boomer_world.resources.player.dash_cooldown = 0.0;
     boomer_world.resources.player.iframes = 0.0;
+}
+
+fn load_best() -> u32 {
+    std::fs::read_to_string(BEST_SCORE_PATH)
+        .ok()
+        .and_then(|text| text.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+fn save_best(score: u32) {
+    let _ = std::fs::write(BEST_SCORE_PATH, score.to_string());
 }
