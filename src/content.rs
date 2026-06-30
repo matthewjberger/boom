@@ -289,32 +289,36 @@ const L3_PADS: &[(f32, f32)] = &[(6.5, 6.5), (-6.5, -6.5), (0.0, 9.0)];
 // to the north gate.
 // ============================================================================
 const L4_BLOCKS: &[BlockSpec] = &[
-    // West room shell: x[-18,-6], z[2,14]
-    (-6.0, 4.0, 4.0, 1.0, 8.0, 4.0, Wall),  // inner wall z[2,6]
-    (-6.0, 4.0, 11.5, 1.0, 8.0, 5.0, Wall), // inner wall z[9,14], gap z[6,9]
-    (-12.0, 4.0, 14.0, 13.0, 8.0, 1.0, Wall), // north of west room
-    // East room shell: x[6,18], z[-14,-2]
-    (6.0, 4.0, -4.0, 1.0, 8.0, 4.0, Wall),
-    (6.0, 4.0, -11.5, 1.0, 8.0, 5.0, Wall), // gap z[-9,-6]
-    (12.0, 4.0, -14.0, 13.0, 8.0, 1.0, Wall),
-    // spine cover
-    (0.0, 0.6, 6.0, 3.0, 1.2, 1.4, Cover),
-    (0.0, 0.6, -6.0, 3.0, 1.2, 1.4, Cover),
-    (-12.0, 0.6, 8.0, 2.0, 1.2, 2.0, Cover), // by the keycard
-    (12.0, 0.6, -8.0, 2.0, 1.2, 2.0, Cover),
+    // West chamber (keycard vault): enclosed pocket off the spine's left, one
+    // doorway at z[8,11]. South wall seals it; the spine divider is the east wall.
+    (-11.0, 4.0, 3.0, 14.0, 8.0, 1.0, Wall), // south wall, x[-18,-4]
+    (-4.0, 4.0, 5.5, 1.0, 8.0, 5.0, Wall),   // spine divider z[3,8]
+    (-4.0, 4.0, 13.0, 1.0, 8.0, 4.0, Wall),  // spine divider z[11,15]
+    (-12.0, 0.5, 8.0, 1.8, 1.0, 1.8, Core),  // keycard shrine pedestal
+    // East chamber (ambush pocket): mirror, doorway at z[-11,-8].
+    (11.0, 4.0, -3.0, 14.0, 8.0, 1.0, Wall), // north wall, x[4,18]
+    (4.0, 4.0, -5.5, 1.0, 8.0, 5.0, Wall),   // spine divider z[-8,-3]
+    (4.0, 4.0, -13.0, 1.0, 8.0, 4.0, Wall),  // spine divider z[-15,-11]
+    // Spine baffles: stagger the central run so it weaves instead of a straight shot.
+    (1.8, 0.9, 4.0, 3.6, 1.8, 1.0, Cover),
+    (-1.8, 0.9, -4.0, 3.6, 1.8, 1.0, Cover),
+    (-12.0, 0.6, 12.0, 3.0, 1.2, 1.4, Cover), // cover inside the vault
+    (12.0, 0.6, -12.0, 3.0, 1.2, 1.4, Cover), // cover inside the ambush pocket
 ];
 const L4_BEACONS: &[BeaconSpec] = &[
-    (-12.0, 8.0, [1.6, 0.85, 0.2]), // lights the keycard room
-    (12.0, -8.0, [0.3, 1.4, 1.6]),
-    (0.0, 0.0, [0.5, 0.5, 0.9]),
+    (-12.0, 8.0, [1.9, 0.7, 0.2]),  // keycard shrine, hot gold
+    (-4.0, 9.5, [0.3, 1.3, 1.6]),   // vault doorway, cyan
+    (4.0, -9.5, [1.7, 0.4, 0.3]),   // ambush doorway, red
+    (0.0, 5.0, [0.4, 0.5, 0.95]),   // spine waypoints
+    (0.0, -5.0, [0.4, 0.5, 0.95]),
 ];
 const L4_SPAWNS: &[(f32, f32)] = &[
-    (0.0, 12.0),
-    (0.0, -12.0),
+    (0.0, 11.0),
+    (0.0, -11.0),
     (-12.0, 6.0),
     (12.0, -6.0),
-    (14.0, 10.0),
-    (-14.0, -10.0),
+    (14.0, 12.0),
+    (-14.0, -12.0),
 ];
 const L4_PADS: &[(f32, f32)] = &[];
 
