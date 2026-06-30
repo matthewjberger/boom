@@ -11,7 +11,23 @@ const PROBE_HEIGHT: f32 = 0.6;
 const PROBE_DISTANCE: f32 = 1.9;
 const HURT_CODE: u8 = 200;
 
+/// How an enemy moves and fights. Selects the per-frame branch in [`update`], so
+/// a new archetype is a table entry plus (at most) one variant here, rather than
+/// another arm grafted onto the movement loop.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Behavior {
+    /// Ground melee: close in, telegraph, then lunge (imp, swarmer, brute).
+    MeleeGround,
+    /// Flyer that hovers, telegraphs, then dive-bombs (gargoyle).
+    FlyingDive,
+    /// Flyer that holds range and lobs fireballs (sentinel).
+    FlyingRanged,
+    /// Ground caster that holds range and lobs fireballs (caster).
+    GroundRanged,
+}
+
 struct Stats {
+    behavior: Behavior,
     health: f32,
     speed: f32,
     width: f32,
@@ -22,6 +38,13 @@ struct Stats {
     windup_time: f32,
     lunge_speed: f32,
     lunge_reach: f32,
+    /// Ranged archetypes: seconds between shots and the stand-off range held.
+    fire_cooldown: f32,
+    preferred_range: f32,
+    /// Flyers: the altitude hovered at between attacks.
+    hover: f32,
+    /// Particle count on death (a boss overrides this with its own larger burst).
+    death_particles: u32,
     score: u32,
     key: &'static str,
     color: Vec3,
@@ -30,6 +53,7 @@ struct Stats {
 fn stats(kind: EnemyKind) -> Stats {
     match kind {
         EnemyKind::Imp => Stats {
+            behavior: Behavior::MeleeGround,
             health: tuning::IMP_HEALTH,
             speed: tuning::IMP_SPEED,
             width: tuning::IMP_WIDTH,
@@ -40,11 +64,16 @@ fn stats(kind: EnemyKind) -> Stats {
             windup_time: tuning::IMP_WINDUP,
             lunge_speed: tuning::IMP_LUNGE,
             lunge_reach: tuning::IMP_LUNGE_REACH,
+            fire_cooldown: 0.0,
+            preferred_range: 0.0,
+            hover: 0.0,
+            death_particles: 90,
             score: tuning::IMP_SCORE,
             key: "imp",
             color: vec3(1.0, 0.3, 0.2),
         },
         EnemyKind::Swarmer => Stats {
+            behavior: Behavior::MeleeGround,
             health: tuning::SWARM_HEALTH,
             speed: tuning::SWARM_SPEED,
             width: tuning::SWARM_WIDTH,
@@ -55,11 +84,16 @@ fn stats(kind: EnemyKind) -> Stats {
             windup_time: tuning::SWARM_WINDUP,
             lunge_speed: tuning::SWARM_LUNGE,
             lunge_reach: tuning::SWARM_LUNGE_REACH,
+            fire_cooldown: 0.0,
+            preferred_range: 0.0,
+            hover: 0.0,
+            death_particles: 60,
             score: tuning::SWARM_SCORE,
             key: "swarm",
             color: vec3(0.4, 1.0, 0.4),
         },
         EnemyKind::Caster => Stats {
+            behavior: Behavior::GroundRanged,
             health: tuning::CASTER_HEALTH,
             speed: tuning::CASTER_SPEED,
             width: tuning::CASTER_WIDTH,
@@ -70,11 +104,16 @@ fn stats(kind: EnemyKind) -> Stats {
             windup_time: tuning::CASTER_WINDUP,
             lunge_speed: 0.0,
             lunge_reach: 0.0,
+            fire_cooldown: tuning::CASTER_FIRE_COOLDOWN,
+            preferred_range: tuning::CASTER_PREFERRED_RANGE,
+            hover: 0.0,
+            death_particles: 110,
             score: tuning::CASTER_SCORE,
             key: "caster",
             color: vec3(0.75, 0.4, 1.0),
         },
         EnemyKind::Brute => Stats {
+            behavior: Behavior::MeleeGround,
             health: tuning::BRUTE_HEALTH,
             speed: tuning::BRUTE_SPEED,
             width: tuning::BRUTE_WIDTH,
@@ -85,11 +124,16 @@ fn stats(kind: EnemyKind) -> Stats {
             windup_time: tuning::BRUTE_WINDUP,
             lunge_speed: tuning::BRUTE_LUNGE,
             lunge_reach: tuning::BRUTE_LUNGE_REACH,
+            fire_cooldown: 0.0,
+            preferred_range: 0.0,
+            hover: 0.0,
+            death_particles: 150,
             score: tuning::BRUTE_SCORE,
             key: "brute",
             color: vec3(1.0, 0.45, 0.15),
         },
         EnemyKind::Gargoyle => Stats {
+            behavior: Behavior::FlyingDive,
             health: tuning::GARGOYLE_HEALTH,
             speed: tuning::GARGOYLE_SPEED,
             width: tuning::GARGOYLE_WIDTH,
@@ -100,11 +144,16 @@ fn stats(kind: EnemyKind) -> Stats {
             windup_time: tuning::GARGOYLE_WINDUP,
             lunge_speed: tuning::GARGOYLE_LUNGE,
             lunge_reach: tuning::GARGOYLE_LUNGE_REACH,
+            fire_cooldown: 0.0,
+            preferred_range: 0.0,
+            hover: tuning::GARGOYLE_HOVER,
+            death_particles: 100,
             score: tuning::GARGOYLE_SCORE,
             key: "gargoyle",
             color: vec3(0.55, 0.55, 1.0),
         },
         EnemyKind::Sentinel => Stats {
+            behavior: Behavior::FlyingRanged,
             health: tuning::SENTINEL_HEALTH,
             speed: tuning::SENTINEL_SPEED,
             width: tuning::SENTINEL_WIDTH,
@@ -115,6 +164,10 @@ fn stats(kind: EnemyKind) -> Stats {
             windup_time: tuning::SENTINEL_WINDUP,
             lunge_speed: 0.0,
             lunge_reach: 0.0,
+            fire_cooldown: tuning::SENTINEL_FIRE_COOLDOWN,
+            preferred_range: tuning::SENTINEL_PREFERRED_RANGE,
+            hover: tuning::SENTINEL_HOVER,
+            death_particles: 90,
             score: tuning::SENTINEL_SCORE,
             key: "sentinel",
             color: vec3(0.3, 0.9, 1.0),
@@ -122,17 +175,8 @@ fn stats(kind: EnemyKind) -> Stats {
     }
 }
 
-fn is_melee(kind: EnemyKind) -> bool {
-    matches!(kind, EnemyKind::Imp | EnemyKind::Swarmer | EnemyKind::Brute)
-}
-
-fn is_flying(kind: EnemyKind) -> bool {
-    matches!(kind, EnemyKind::Gargoyle | EnemyKind::Sentinel)
-}
-
-/// A flyer that lobs fireballs rather than dive-bombing.
-fn is_flying_ranged(kind: EnemyKind) -> bool {
-    matches!(kind, EnemyKind::Sentinel)
+fn is_flying(behavior: Behavior) -> bool {
+    matches!(behavior, Behavior::FlyingDive | Behavior::FlyingRanged)
 }
 
 /// Resolve the registered material name for an enemy's current visual state.
@@ -171,12 +215,8 @@ pub fn spawn(
 ) {
     let s = stats(kind);
     let mut spawn_position = position;
-    if is_flying(kind) {
-        spawn_position.y = if matches!(kind, EnemyKind::Sentinel) {
-            tuning::SENTINEL_HOVER
-        } else {
-            tuning::GARGOYLE_HOVER
-        };
+    if is_flying(s.behavior) {
+        spawn_position.y = s.hover;
     }
     let idle_material = enemy_material(s.key, elite, false, 0);
     let engine = billboard::spawn(
@@ -263,15 +303,7 @@ pub fn damage(
 
     fx::hit(boomer_world, world, point, s.color);
     if dead {
-        let base_count = match kind {
-            EnemyKind::Swarmer => 60,
-            EnemyKind::Imp => 90,
-            EnemyKind::Caster => 110,
-            EnemyKind::Gargoyle => 100,
-            EnemyKind::Sentinel => 90,
-            EnemyKind::Brute => 150,
-        };
-        let count = if boss { 320 } else { base_count };
+        let count = if boss { 320 } else { s.death_particles };
         fx::death(
             boomer_world,
             world,
@@ -318,9 +350,7 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
         })
         .collect();
 
-    let mut melee_damage = 0.0;
-    let mut fireballs: Vec<(Vec3, Vec3, f32)> = Vec::new();
-    let mut telegraphs: Vec<(Vec3, Vec3)> = Vec::new();
+    let mut effects = Effects::default();
     let time = world.resources.window.timing.uptime_milliseconds as f32 / 1000.0;
 
     for (_, _, enemy) in snapshots.iter_mut() {
@@ -344,143 +374,28 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
         } else {
             vec3(0.0, 0.0, 1.0)
         };
+        let context = StepContext {
+            player_center,
+            direction,
+            distance,
+            delta,
+            time,
+        };
 
-        if is_flying_ranged(enemy.kind) {
-            let target_alt = tuning::SENTINEL_HOVER + (time * 1.8 + enemy.position.x).sin() * 0.4;
-            enemy.position.y += (target_alt - enemy.position.y) * (3.0 * delta).min(1.0);
-            enemy.state = EnemyState::Chase;
-            let preferred = tuning::SENTINEL_PREFERRED_RANGE;
-            let move_dir = if distance > preferred + 1.5 {
-                direction
-            } else if distance < preferred - 1.5 {
-                -direction
-            } else {
-                vec3(direction.z, 0.0, -direction.x) * enemy.strafe_dir
-            };
-            let steer = avoid(world, enemy.position, move_dir);
-            enemy.position += steer * s.speed * delta;
-
-            if enemy.windup > 0.0 {
-                enemy.windup -= delta;
-                if enemy.windup <= 0.0 {
-                    enemy.fire_cooldown = tuning::SENTINEL_FIRE_COOLDOWN;
-                    let damage = tuning::FIREBALL_DAMAGE
-                        * if enemy.elite {
-                            tuning::ELITE_DAMAGE_MULT
-                        } else {
-                            1.0
-                        };
-                    fireballs.push((center(enemy), player_center, damage));
-                }
-            } else if enemy.fire_cooldown <= 0.0 {
-                enemy.windup = s.windup_time;
+        match s.behavior {
+            Behavior::FlyingRanged => {
+                behave_flying_ranged(enemy, &s, &context, world, &mut effects)
             }
-        } else if is_flying(enemy.kind) {
-            let center_offset = s.height * 0.5;
-            let to_player_3d = player_center - (enemy.position + vec3(0.0, center_offset, 0.0));
-            let dist3 = to_player_3d.norm();
-            let dir3 = if dist3 > 1e-3 {
-                to_player_3d / dist3
-            } else {
-                vec3(0.0, 0.0, 1.0)
-            };
-            if enemy.windup > 0.0 {
-                enemy.state = EnemyState::Attack;
-                enemy.windup -= delta;
-                if enemy.windup <= 0.0 {
-                    enemy.attack_cooldown = s.attack_cooldown;
-                    enemy.velocity += dir3 * s.lunge_speed;
-                    if dist3 <= s.attack_range + s.lunge_reach {
-                        let mut multiplier = 1.0;
-                        if enemy.elite {
-                            multiplier *= tuning::ELITE_DAMAGE_MULT;
-                        }
-                        if enemy.boss {
-                            multiplier *= tuning::BOSS_DAMAGE_MULT;
-                        }
-                        melee_damage += s.attack_damage * multiplier;
-                    }
-                }
-            } else if dist3 > s.attack_range {
-                enemy.state = EnemyState::Chase;
-                let steer = avoid(world, enemy.position, direction);
-                enemy.position += steer * s.speed * delta;
-                let target_alt =
-                    tuning::GARGOYLE_HOVER + (time * 2.2 + enemy.position.x).sin() * 0.45;
-                enemy.position.y += (target_alt - enemy.position.y) * (3.0 * delta).min(1.0);
-            } else if enemy.attack_cooldown <= 0.0 {
-                enemy.state = EnemyState::Attack;
-                enemy.windup = s.windup_time;
-                telegraphs.push((enemy.position + vec3(0.0, s.height * 0.6, 0.0), s.color));
-            } else {
-                enemy.state = EnemyState::Attack;
-                enemy.position.y +=
-                    (tuning::GARGOYLE_HOVER - enemy.position.y) * (2.0 * delta).min(1.0);
-            }
-        } else if is_melee(enemy.kind) {
-            let vertical = player_center.y - (enemy.position.y + tuning::ENEMY_CENTER_HEIGHT);
-            let attack_distance = (distance * distance + vertical * vertical).sqrt();
-            if enemy.windup > 0.0 {
-                enemy.state = EnemyState::Attack;
-                enemy.windup -= delta;
-                if enemy.windup <= 0.0 {
-                    enemy.attack_cooldown = s.attack_cooldown;
-                    enemy.velocity += direction * s.lunge_speed;
-                    if attack_distance <= s.attack_range + s.lunge_reach {
-                        let mut multiplier = 1.0;
-                        if enemy.elite {
-                            multiplier *= tuning::ELITE_DAMAGE_MULT;
-                        }
-                        if enemy.boss {
-                            multiplier *= tuning::BOSS_DAMAGE_MULT;
-                        }
-                        melee_damage += s.attack_damage * multiplier;
-                    }
-                }
-            } else if attack_distance > s.attack_range {
-                enemy.state = EnemyState::Chase;
-                let steer = avoid(world, enemy.position, direction);
-                enemy.position += steer * s.speed * delta;
-            } else if enemy.attack_cooldown <= 0.0 {
-                enemy.state = EnemyState::Attack;
-                enemy.windup = s.windup_time;
-                telegraphs.push((enemy.position + vec3(0.0, s.height * 0.6, 0.0), s.color));
-            } else {
-                enemy.state = EnemyState::Attack;
-            }
-        } else {
-            enemy.state = EnemyState::Chase;
-            let preferred = tuning::CASTER_PREFERRED_RANGE;
-            let move_dir = if distance > preferred + 1.5 {
-                direction
-            } else if distance < preferred - 1.5 {
-                -direction
-            } else {
-                vec3(direction.z, 0.0, -direction.x) * enemy.strafe_dir
-            };
-            let steer = avoid(world, enemy.position, move_dir);
-            enemy.position += steer * s.speed * delta;
-
-            if enemy.windup > 0.0 {
-                enemy.windup -= delta;
-                if enemy.windup <= 0.0 {
-                    enemy.fire_cooldown = tuning::CASTER_FIRE_COOLDOWN;
-                    let damage = tuning::FIREBALL_DAMAGE
-                        * if enemy.elite {
-                            tuning::ELITE_DAMAGE_MULT
-                        } else {
-                            1.0
-                        };
-                    fireballs.push((center(enemy), player_center, damage));
-                }
-            } else if enemy.fire_cooldown <= 0.0 {
-                enemy.windup = s.windup_time;
+            Behavior::FlyingDive => behave_flying_dive(enemy, &s, &context, world, &mut effects),
+            Behavior::MeleeGround => behave_melee(enemy, &s, &context, world, &mut effects),
+            Behavior::GroundRanged => {
+                behave_ground_ranged(enemy, &s, &context, world, &mut effects)
             }
         }
 
         enemy.position.x = enemy.position.x.clamp(-bound_x, bound_x);
         enemy.position.z = enemy.position.z.clamp(-bound_z, bound_z);
-        if is_flying(enemy.kind) {
+        if is_flying(s.behavior) {
             enemy.position.y = enemy
                 .position
                 .y
@@ -492,14 +407,14 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
 
     separate(&mut snapshots, bound_x, bound_z);
 
-    if melee_damage > 0.0 {
-        game::damage_player(boomer_world, world, melee_damage);
+    if effects.melee_damage > 0.0 {
+        game::damage_player(boomer_world, world, effects.melee_damage);
     }
-    for (origin, target, damage) in fireballs {
+    for (origin, target, damage) in effects.fireballs {
         projectiles::spawn(boomer_world, world, origin, target, damage);
         audio::play(boomer_world, world, audio::FIREBALL, 0.32);
     }
-    for (position, color) in telegraphs {
+    for (position, color) in effects.telegraphs {
         fx::hit(boomer_world, world, position, color);
     }
 
@@ -550,6 +465,183 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
     }
 
     remove_dead(boomer_world, world);
+}
+
+/// Per-frame inputs shared by every behaviour: where the player is, the ground
+/// direction and distance to them, the frame delta, and the world clock.
+struct StepContext {
+    player_center: Vec3,
+    direction: Vec3,
+    distance: f32,
+    delta: f32,
+    time: f32,
+}
+
+/// World-mutating consequences a behaviour produces, drained after the movement
+/// loop so the borrow of `world` stays read-only inside the per-enemy step.
+#[derive(Default)]
+struct Effects {
+    melee_damage: f32,
+    fireballs: Vec<(Vec3, Vec3, f32)>,
+    telegraphs: Vec<(Vec3, Vec3)>,
+}
+
+/// Melee/dive strike damage, scaled by elite and boss multipliers.
+fn lunge_damage(enemy: &Enemy, s: &Stats) -> f32 {
+    let mut multiplier = 1.0;
+    if enemy.elite {
+        multiplier *= tuning::ELITE_DAMAGE_MULT;
+    }
+    if enemy.boss {
+        multiplier *= tuning::BOSS_DAMAGE_MULT;
+    }
+    s.attack_damage * multiplier
+}
+
+/// Fireball damage for ranged casters, scaled by the elite multiplier.
+fn fireball_damage(enemy: &Enemy) -> f32 {
+    tuning::FIREBALL_DAMAGE
+        * if enemy.elite {
+            tuning::ELITE_DAMAGE_MULT
+        } else {
+            1.0
+        }
+}
+
+/// Hold the preferred stand-off range: advance when too far, retreat when too
+/// close, strafe when in the band.
+fn ranged_move_dir(enemy: &Enemy, s: &Stats, ctx: &StepContext) -> Vec3 {
+    if ctx.distance > s.preferred_range + 1.5 {
+        ctx.direction
+    } else if ctx.distance < s.preferred_range - 1.5 {
+        -ctx.direction
+    } else {
+        vec3(ctx.direction.z, 0.0, -ctx.direction.x) * enemy.strafe_dir
+    }
+}
+
+/// Wind up, then loose a fireball; otherwise begin a new wind-up once cool.
+fn ranged_fire(enemy: &mut Enemy, s: &Stats, ctx: &StepContext, effects: &mut Effects) {
+    if enemy.windup > 0.0 {
+        enemy.windup -= ctx.delta;
+        if enemy.windup <= 0.0 {
+            enemy.fire_cooldown = s.fire_cooldown;
+            effects
+                .fireballs
+                .push((center(enemy), ctx.player_center, fireball_damage(enemy)));
+        }
+    } else if enemy.fire_cooldown <= 0.0 {
+        enemy.windup = s.windup_time;
+    }
+}
+
+/// Sentinel: bob at hover altitude, hold range, and lob fireballs.
+fn behave_flying_ranged(
+    enemy: &mut Enemy,
+    s: &Stats,
+    ctx: &StepContext,
+    world: &World,
+    effects: &mut Effects,
+) {
+    let target_alt = s.hover + (ctx.time * 1.8 + enemy.position.x).sin() * 0.4;
+    enemy.position.y += (target_alt - enemy.position.y) * (3.0 * ctx.delta).min(1.0);
+    enemy.state = EnemyState::Chase;
+    let steer = avoid(world, enemy.position, ranged_move_dir(enemy, s, ctx));
+    enemy.position += steer * s.speed * ctx.delta;
+    ranged_fire(enemy, s, ctx, effects);
+}
+
+/// Caster: hold range on the ground and lob fireballs.
+fn behave_ground_ranged(
+    enemy: &mut Enemy,
+    s: &Stats,
+    ctx: &StepContext,
+    world: &World,
+    effects: &mut Effects,
+) {
+    enemy.state = EnemyState::Chase;
+    let steer = avoid(world, enemy.position, ranged_move_dir(enemy, s, ctx));
+    enemy.position += steer * s.speed * ctx.delta;
+    ranged_fire(enemy, s, ctx, effects);
+}
+
+/// Gargoyle: hover and close, telegraph, then dive-bomb the player in 3D.
+fn behave_flying_dive(
+    enemy: &mut Enemy,
+    s: &Stats,
+    ctx: &StepContext,
+    world: &World,
+    effects: &mut Effects,
+) {
+    let center_offset = s.height * 0.5;
+    let to_player_3d = ctx.player_center - (enemy.position + vec3(0.0, center_offset, 0.0));
+    let dist3 = to_player_3d.norm();
+    let dir3 = if dist3 > 1e-3 {
+        to_player_3d / dist3
+    } else {
+        vec3(0.0, 0.0, 1.0)
+    };
+    if enemy.windup > 0.0 {
+        enemy.state = EnemyState::Attack;
+        enemy.windup -= ctx.delta;
+        if enemy.windup <= 0.0 {
+            enemy.attack_cooldown = s.attack_cooldown;
+            enemy.velocity += dir3 * s.lunge_speed;
+            if dist3 <= s.attack_range + s.lunge_reach {
+                effects.melee_damage += lunge_damage(enemy, s);
+            }
+        }
+    } else if dist3 > s.attack_range {
+        enemy.state = EnemyState::Chase;
+        let steer = avoid(world, enemy.position, ctx.direction);
+        enemy.position += steer * s.speed * ctx.delta;
+        let target_alt = s.hover + (ctx.time * 2.2 + enemy.position.x).sin() * 0.45;
+        enemy.position.y += (target_alt - enemy.position.y) * (3.0 * ctx.delta).min(1.0);
+    } else if enemy.attack_cooldown <= 0.0 {
+        enemy.state = EnemyState::Attack;
+        enemy.windup = s.windup_time;
+        effects
+            .telegraphs
+            .push((enemy.position + vec3(0.0, s.height * 0.6, 0.0), s.color));
+    } else {
+        enemy.state = EnemyState::Attack;
+        enemy.position.y += (s.hover - enemy.position.y) * (2.0 * ctx.delta).min(1.0);
+    }
+}
+
+/// Imp / swarmer / brute: close on the ground, telegraph, then lunge.
+fn behave_melee(
+    enemy: &mut Enemy,
+    s: &Stats,
+    ctx: &StepContext,
+    world: &World,
+    effects: &mut Effects,
+) {
+    let vertical = ctx.player_center.y - (enemy.position.y + tuning::ENEMY_CENTER_HEIGHT);
+    let attack_distance = (ctx.distance * ctx.distance + vertical * vertical).sqrt();
+    if enemy.windup > 0.0 {
+        enemy.state = EnemyState::Attack;
+        enemy.windup -= ctx.delta;
+        if enemy.windup <= 0.0 {
+            enemy.attack_cooldown = s.attack_cooldown;
+            enemy.velocity += ctx.direction * s.lunge_speed;
+            if attack_distance <= s.attack_range + s.lunge_reach {
+                effects.melee_damage += lunge_damage(enemy, s);
+            }
+        }
+    } else if attack_distance > s.attack_range {
+        enemy.state = EnemyState::Chase;
+        let steer = avoid(world, enemy.position, ctx.direction);
+        enemy.position += steer * s.speed * ctx.delta;
+    } else if enemy.attack_cooldown <= 0.0 {
+        enemy.state = EnemyState::Attack;
+        enemy.windup = s.windup_time;
+        effects
+            .telegraphs
+            .push((enemy.position + vec3(0.0, s.height * 0.6, 0.0), s.color));
+    } else {
+        enemy.state = EnemyState::Attack;
+    }
 }
 
 fn set_scale(world: &mut World, entity: Entity, scale: Vec3) {

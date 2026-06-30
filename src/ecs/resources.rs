@@ -62,6 +62,11 @@ pub enum Difficulty {
 }
 
 impl Difficulty {
+    /// Wire order for [`Difficulty::code`] / [`Difficulty::from_code`]. The single
+    /// source of truth for on-disk codes: both directions derive from it, so a new
+    /// variant can never desync the two halves of the mapping.
+    const ORDER: [Difficulty; 3] = [Difficulty::Easy, Difficulty::Normal, Difficulty::Hard];
+
     pub fn label(self) -> &'static str {
         match self {
             Difficulty::Easy => "EASY",
@@ -97,19 +102,18 @@ impl Difficulty {
     }
 
     pub fn code(self) -> u8 {
-        match self {
-            Difficulty::Easy => 0,
-            Difficulty::Normal => 1,
-            Difficulty::Hard => 2,
-        }
+        Self::ORDER
+            .iter()
+            .position(|&difficulty| difficulty == self)
+            .map(|index| index as u8)
+            .unwrap_or(0)
     }
 
     pub fn from_code(code: u8) -> Difficulty {
-        match code {
-            0 => Difficulty::Easy,
-            2 => Difficulty::Hard,
-            _ => Difficulty::Normal,
-        }
+        Self::ORDER
+            .get(code as usize)
+            .copied()
+            .unwrap_or(Difficulty::Normal)
     }
 }
 
@@ -153,7 +157,23 @@ pub enum WeaponKind {
     Railgun,
 }
 
+/// Per-weapon ammo economy: starting reserve, hard cap, and refill per pickup.
+struct AmmoSpec {
+    start: u32,
+    max: u32,
+    pickup: u32,
+}
+
 impl WeaponKind {
+    /// Every weapon in slot order. Indexing it is the canonical weapon→slot map
+    /// (see [`WeaponKind::index`]); iterate it to touch each weapon's ammo pool.
+    pub const ALL: [WeaponKind; 4] = [
+        WeaponKind::Shotgun,
+        WeaponKind::Nailgun,
+        WeaponKind::Rocket,
+        WeaponKind::Railgun,
+    ];
+
     pub fn name(self) -> &'static str {
         match self {
             WeaponKind::Shotgun => "SHOTGUN",
@@ -162,16 +182,56 @@ impl WeaponKind {
             WeaponKind::Railgun => "RAILGUN",
         }
     }
+
+    /// This weapon's slot in [`WeaponKind::ALL`] and in the ammo-pool array.
+    pub fn index(self) -> usize {
+        self as usize
+    }
+
+    fn ammo_spec(self) -> AmmoSpec {
+        match self {
+            WeaponKind::Shotgun => AmmoSpec {
+                start: tuning::SHOTGUN_START,
+                max: tuning::SHOTGUN_MAX,
+                pickup: tuning::SHOTGUN_PICKUP,
+            },
+            WeaponKind::Nailgun => AmmoSpec {
+                start: tuning::NAIL_START,
+                max: tuning::NAIL_MAX,
+                pickup: tuning::NAIL_PICKUP,
+            },
+            WeaponKind::Rocket => AmmoSpec {
+                start: tuning::ROCKET_START,
+                max: tuning::ROCKET_MAX,
+                pickup: tuning::ROCKET_PICKUP,
+            },
+            WeaponKind::Railgun => AmmoSpec {
+                start: tuning::RAIL_START,
+                max: tuning::RAIL_MAX,
+                pickup: tuning::RAIL_PICKUP,
+            },
+        }
+    }
+
+    pub fn max_ammo(self) -> u32 {
+        self.ammo_spec().max
+    }
+
+    pub fn start_ammo(self) -> u32 {
+        self.ammo_spec().start
+    }
+
+    pub fn pickup_ammo(self) -> u32 {
+        self.ammo_spec().pickup
+    }
 }
 
 /// Each weapon draws from its own ammo pool, so weapon choice is a real
-/// resource decision rather than a shared spread-pattern toggle.
+/// resource decision rather than a shared spread-pattern toggle. Pools are keyed
+/// by [`WeaponKind::index`].
 pub struct WeaponState {
     pub current: WeaponKind,
-    pub shells: u32,
-    pub nails: u32,
-    pub rockets: u32,
-    pub rails: u32,
+    pools: [u32; WeaponKind::ALL.len()],
     pub cooldown: f32,
     /// Brief crosshair kick when a shot lands.
     pub hit_marker: f32,
@@ -179,30 +239,17 @@ pub struct WeaponState {
 
 impl WeaponState {
     pub fn ammo(&self, kind: WeaponKind) -> u32 {
-        match kind {
-            WeaponKind::Shotgun => self.shells,
-            WeaponKind::Nailgun => self.nails,
-            WeaponKind::Rocket => self.rockets,
-            WeaponKind::Railgun => self.rails,
-        }
+        self.pools[kind.index()]
     }
 
     pub fn ammo_mut(&mut self, kind: WeaponKind) -> &mut u32 {
-        match kind {
-            WeaponKind::Shotgun => &mut self.shells,
-            WeaponKind::Nailgun => &mut self.nails,
-            WeaponKind::Rocket => &mut self.rockets,
-            WeaponKind::Railgun => &mut self.rails,
-        }
+        &mut self.pools[kind.index()]
     }
 
-    pub fn max_ammo(kind: WeaponKind) -> u32 {
-        match kind {
-            WeaponKind::Shotgun => tuning::SHOTGUN_MAX,
-            WeaponKind::Nailgun => tuning::NAIL_MAX,
-            WeaponKind::Rocket => tuning::ROCKET_MAX,
-            WeaponKind::Railgun => tuning::RAIL_MAX,
-        }
+    /// Add `amount` rounds to `kind`'s pool, clamped to that weapon's cap.
+    pub fn add_ammo(&mut self, kind: WeaponKind, amount: u32) {
+        let slot = self.ammo_mut(kind);
+        *slot = (*slot + amount).min(kind.max_ammo());
     }
 }
 
@@ -210,10 +257,7 @@ impl Default for WeaponState {
     fn default() -> Self {
         Self {
             current: WeaponKind::Shotgun,
-            shells: tuning::SHOTGUN_START,
-            nails: tuning::NAIL_START,
-            rockets: tuning::ROCKET_START,
-            rails: tuning::RAIL_START,
+            pools: std::array::from_fn(|slot| WeaponKind::ALL[slot].start_ammo()),
             cooldown: 0.0,
             hit_marker: 0.0,
         }

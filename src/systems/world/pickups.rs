@@ -1,5 +1,5 @@
 use crate::ecs::{
-    BoomerWorld, ENGINE_ENTITY, EngineEntity, PICKUP, Pickup, PickupKind, WeaponState,
+    BoomerWorld, ENGINE_ENTITY, EngineEntity, PICKUP, Pickup, PickupKind, WeaponKind,
 };
 use crate::systems::common::next_random;
 use crate::systems::world::textures::{MAT_AMMO, MAT_KEYCARD, MAT_MEDKIT};
@@ -27,8 +27,8 @@ pub fn maybe_drop(boomer_world: &mut BoomerWorld, world: &mut World, position: V
     let health_fraction =
         boomer_world.resources.stats.health / boomer_world.resources.stats.max_health;
     let current = boomer_world.resources.weapon.current;
-    let ammo_fraction = boomer_world.resources.weapon.ammo(current) as f32
-        / WeaponState::max_ammo(current).max(1) as f32;
+    let ammo_fraction =
+        boomer_world.resources.weapon.ammo(current) as f32 / current.max_ammo().max(1) as f32;
     let roll = next_random(&mut boomer_world.resources.game.random_state);
 
     let kind = if health_fraction < 0.5 && roll < 0.32 {
@@ -108,10 +108,9 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
             }
             PickupKind::Ammo => {
                 let weapon = &boomer_world.resources.weapon;
-                weapon.shells < tuning::SHOTGUN_MAX
-                    || weapon.nails < tuning::NAIL_MAX
-                    || weapon.rockets < tuning::ROCKET_MAX
-                    || weapon.rails < tuning::RAIL_MAX
+                WeaponKind::ALL
+                    .iter()
+                    .any(|&kind| weapon.ammo(kind) < kind.max_ammo())
             }
             PickupKind::Keycard => !boomer_world.resources.game.has_key,
         };
@@ -132,10 +131,9 @@ pub fn update(boomer_world: &mut BoomerWorld, world: &mut World) {
             }
             PickupKind::Ammo => {
                 let weapon = &mut boomer_world.resources.weapon;
-                weapon.shells = (weapon.shells + tuning::SHOTGUN_PICKUP).min(tuning::SHOTGUN_MAX);
-                weapon.nails = (weapon.nails + tuning::NAIL_PICKUP).min(tuning::NAIL_MAX);
-                weapon.rockets = (weapon.rockets + tuning::ROCKET_PICKUP).min(tuning::ROCKET_MAX);
-                weapon.rails = (weapon.rails + tuning::RAIL_PICKUP).min(tuning::RAIL_MAX);
+                for kind in WeaponKind::ALL {
+                    weapon.add_ammo(kind, kind.pickup_ammo());
+                }
             }
             PickupKind::Keycard => {
                 boomer_world.resources.game.has_key = true;

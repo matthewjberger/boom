@@ -1,6 +1,6 @@
 use crate::campaign::{self, Objective};
 use crate::content;
-use crate::ecs::{BoomerWorld, EnemyKind, Phase, SpawnEntry};
+use crate::ecs::{BoomerWorld, EnemyKind, Phase, SpawnEntry, WeaponKind};
 use crate::systems::common::{combo_multiplier, next_random, random_range};
 use crate::systems::world::{audio, enemies, level, pickups, player, projectiles};
 use crate::tuning;
@@ -14,12 +14,7 @@ const BANNER_TIME: f32 = 2.4;
 const BEST_SCORE_PATH: &str = "boom_best.txt";
 
 pub fn start_at(boomer_world: &mut BoomerWorld, world: &mut World, absolute_index: usize) {
-    if !boomer_world.resources.game.seeded {
-        let uptime = world.resources.window.timing.uptime_milliseconds;
-        boomer_world.resources.game.random_state = 0x9e37_79b9_7f4a_7c15 ^ (uptime | 1);
-        boomer_world.resources.game.best_score = load_best();
-        boomer_world.resources.game.seeded = true;
-    }
+    ensure_seeded(boomer_world, world);
     reset_core(boomer_world);
     load_level(boomer_world, world, absolute_index);
 }
@@ -55,18 +50,8 @@ pub fn load_level(boomer_world: &mut BoomerWorld, world: &mut World, absolute_in
     let cycle = boomer_world.resources.level.cycle;
     let scale = 1.0 + cycle as f32 * 0.5;
     let roster = scale_roster(definition.roster, scale);
-    let mut waves = build_waves(boomer_world, roster, cycle);
-
-    let first = if waves.is_empty() {
-        Vec::new()
-    } else {
-        waves.remove(0)
-    };
-    boomer_world.resources.game.waves = waves;
-    boomer_world.resources.game.spawn_queue = first;
-    boomer_world.resources.game.spawn_timer = 0.6;
-    boomer_world.resources.level.wave = 1;
-    boomer_world.resources.level.wave_count = tuning::WAVES_PER_LEVEL as u32;
+    let waves = build_waves(boomer_world, roster, cycle);
+    arm_waves(boomer_world, waves);
 
     pickups::spawn_initial(boomer_world, world);
 }
@@ -82,12 +67,7 @@ const DEFAULT_SPAWNS: &[(f32, f32)] = &[
 
 /// Start a play session from the editor's authored level.
 pub fn start_custom(boomer_world: &mut BoomerWorld, world: &mut World) {
-    if !boomer_world.resources.game.seeded {
-        let uptime = world.resources.window.timing.uptime_milliseconds;
-        boomer_world.resources.game.random_state = 0x9e37_79b9_7f4a_7c15 ^ (uptime | 1);
-        boomer_world.resources.game.best_score = load_best();
-        boomer_world.resources.game.seeded = true;
-    }
+    ensure_seeded(boomer_world, world);
     reset_core(boomer_world);
     teardown_world(boomer_world, world);
 
@@ -107,29 +87,15 @@ pub fn start_custom(boomer_world: &mut BoomerWorld, world: &mut World) {
     let spawn = vec3(data.spawn[0], data.spawn[1], data.spawn[2]);
     player::teleport(boomer_world, world, spawn);
 
-    let mut waves = build_waves(boomer_world, data.roster, 0);
-    let first = if waves.is_empty() {
-        Vec::new()
-    } else {
-        waves.remove(0)
-    };
-    boomer_world.resources.game.waves = waves;
-    boomer_world.resources.game.spawn_queue = first;
-    boomer_world.resources.game.spawn_timer = 0.6;
-    boomer_world.resources.level.wave = 1;
-    boomer_world.resources.level.wave_count = tuning::WAVES_PER_LEVEL as u32;
+    let waves = build_waves(boomer_world, data.roster, 0);
+    arm_waves(boomer_world, waves);
 
     pickups::spawn_initial(boomer_world, world);
 }
 
 /// Start a Story-mode mission: a static level framed by an objective.
 pub fn start_mission(boomer_world: &mut BoomerWorld, world: &mut World, index: usize) {
-    if !boomer_world.resources.game.seeded {
-        let uptime = world.resources.window.timing.uptime_milliseconds;
-        boomer_world.resources.game.random_state = 0x9e37_79b9_7f4a_7c15 ^ (uptime | 1);
-        boomer_world.resources.game.best_score = load_best();
-        boomer_world.resources.game.seeded = true;
-    }
+    ensure_seeded(boomer_world, world);
     reset_core(boomer_world);
     teardown_world(boomer_world, world);
 
@@ -158,16 +124,7 @@ pub fn start_mission(boomer_world: &mut BoomerWorld, world: &mut World, index: u
             waves.push(vec![(EnemyKind::Brute, true, true)]);
         }
     }
-    let first = if waves.is_empty() {
-        Vec::new()
-    } else {
-        waves.remove(0)
-    };
-    boomer_world.resources.game.waves = waves;
-    boomer_world.resources.game.spawn_queue = first;
-    boomer_world.resources.game.spawn_timer = 0.6;
-    boomer_world.resources.level.wave = 1;
-    boomer_world.resources.level.wave_count = tuning::WAVES_PER_LEVEL as u32;
+    arm_waves(boomer_world, waves);
 
     pickups::spawn_initial(boomer_world, world);
 
@@ -216,9 +173,9 @@ fn grant_combo_reward(boomer_world: &mut BoomerWorld) {
     let stats = &mut boomer_world.resources.stats;
     stats.health = (stats.health + tuning::COMBO_REWARD_HEAL).min(tuning::OVERHEAL_MAX);
     let weapon = &mut boomer_world.resources.weapon;
-    weapon.shells = (weapon.shells + tuning::COMBO_REWARD_SHELLS).min(tuning::SHOTGUN_MAX);
-    weapon.nails = (weapon.nails + tuning::COMBO_REWARD_NAILS).min(tuning::NAIL_MAX);
-    weapon.rockets = (weapon.rockets + tuning::COMBO_REWARD_ROCKETS).min(tuning::ROCKET_MAX);
+    weapon.add_ammo(WeaponKind::Shotgun, tuning::COMBO_REWARD_SHELLS);
+    weapon.add_ammo(WeaponKind::Nailgun, tuning::COMBO_REWARD_NAILS);
+    weapon.add_ammo(WeaponKind::Rocket, tuning::COMBO_REWARD_ROCKETS);
     boomer_world.resources.game.score_flash = tuning::SCORE_FLASH_TIME;
 }
 
@@ -453,6 +410,33 @@ fn build_waves(
         waves[last].push((EnemyKind::Brute, elite, false));
     }
     waves
+}
+
+/// Seed the run RNG and load the persisted best score the first time any session
+/// starts this process. Idempotent: later sessions keep the live seed and best.
+fn ensure_seeded(boomer_world: &mut BoomerWorld, world: &World) {
+    if boomer_world.resources.game.seeded {
+        return;
+    }
+    let uptime = world.resources.window.timing.uptime_milliseconds;
+    boomer_world.resources.game.random_state = 0x9e37_79b9_7f4a_7c15 ^ (uptime | 1);
+    boomer_world.resources.game.best_score = load_best();
+    boomer_world.resources.game.seeded = true;
+}
+
+/// Load `waves` into the spawn schedule: the first wave becomes the live spawn
+/// queue, the rest are held back, and the wave counters reset to a level's start.
+fn arm_waves(boomer_world: &mut BoomerWorld, mut waves: Vec<Vec<SpawnEntry>>) {
+    let first = if waves.is_empty() {
+        Vec::new()
+    } else {
+        waves.remove(0)
+    };
+    boomer_world.resources.game.waves = waves;
+    boomer_world.resources.game.spawn_queue = first;
+    boomer_world.resources.game.spawn_timer = 0.6;
+    boomer_world.resources.level.wave = 1;
+    boomer_world.resources.level.wave_count = tuning::WAVES_PER_LEVEL as u32;
 }
 
 fn reset_core(boomer_world: &mut BoomerWorld) {

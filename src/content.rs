@@ -20,7 +20,7 @@ pub enum BlockKind {
 }
 
 impl BlockKind {
-    /// The editor's placeable palette (Core is hand-authored only).
+    /// The editor's placeable palette, in display order (Core is hand-authored only).
     pub const ALL: [BlockKind; 6] = [
         BlockKind::Wall,
         BlockKind::Pillar,
@@ -28,6 +28,20 @@ impl BlockKind {
         BlockKind::Cover,
         BlockKind::Choke,
         BlockKind::Monument,
+    ];
+
+    /// Wire order for [`BlockKind::code`] / [`BlockKind::from_code`]. The single
+    /// source of truth for on-disk block codes: both directions derive from it, so
+    /// a new variant can never desync the two halves of the mapping. Append only —
+    /// reordering rewrites the meaning of every saved level file.
+    const ORDER: [BlockKind; 7] = [
+        BlockKind::Wall,
+        BlockKind::Pillar,
+        BlockKind::Cover,
+        BlockKind::Choke,
+        BlockKind::Monument,
+        BlockKind::Platform,
+        BlockKind::Core,
     ];
 
     pub fn label(self) -> &'static str {
@@ -43,27 +57,18 @@ impl BlockKind {
     }
 
     pub fn code(self) -> u8 {
-        match self {
-            BlockKind::Wall => 0,
-            BlockKind::Pillar => 1,
-            BlockKind::Cover => 2,
-            BlockKind::Choke => 3,
-            BlockKind::Monument => 4,
-            BlockKind::Platform => 5,
-            BlockKind::Core => 6,
-        }
+        Self::ORDER
+            .iter()
+            .position(|&kind| kind == self)
+            .map(|index| index as u8)
+            .unwrap_or(0)
     }
 
     pub fn from_code(code: u8) -> BlockKind {
-        match code {
-            1 => BlockKind::Pillar,
-            2 => BlockKind::Cover,
-            3 => BlockKind::Choke,
-            4 => BlockKind::Monument,
-            5 => BlockKind::Platform,
-            6 => BlockKind::Core,
-            _ => BlockKind::Wall,
-        }
+        Self::ORDER
+            .get(code as usize)
+            .copied()
+            .unwrap_or(BlockKind::Wall)
     }
 }
 
@@ -313,10 +318,10 @@ const L4_BLOCKS: &[BlockSpec] = &[
     (12.0, 0.6, -12.0, 3.0, 1.2, 1.4, Cover), // cover inside the ambush pocket
 ];
 const L4_BEACONS: &[BeaconSpec] = &[
-    (-12.0, 8.0, [1.9, 0.7, 0.2]),  // keycard shrine, hot gold
-    (-4.0, 9.5, [0.3, 1.3, 1.6]),   // vault doorway, cyan
-    (4.0, -9.5, [1.7, 0.4, 0.3]),   // ambush doorway, red
-    (0.0, 5.0, [0.4, 0.5, 0.95]),   // spine waypoints
+    (-12.0, 8.0, [1.9, 0.7, 0.2]), // keycard shrine, hot gold
+    (-4.0, 9.5, [0.3, 1.3, 1.6]),  // vault doorway, cyan
+    (4.0, -9.5, [1.7, 0.4, 0.3]),  // ambush doorway, red
+    (0.0, 5.0, [0.4, 0.5, 0.95]),  // spine waypoints
     (0.0, -5.0, [0.4, 0.5, 0.95]),
 ];
 const L4_SPAWNS: &[(f32, f32)] = &[
