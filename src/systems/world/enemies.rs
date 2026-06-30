@@ -195,6 +195,7 @@ pub fn spawn(
     if boss {
         health *= tuning::BOSS_HEALTH_MULT;
     }
+    health *= boomer_world.resources.settings.difficulty.enemy_health();
     let game_entity = boomer_world.spawn_entities(ENEMY | ENGINE_ENTITY, 1)[0];
     boomer_world.set_engine_entity(game_entity, EngineEntity(engine));
     if boss {

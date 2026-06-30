@@ -79,6 +79,15 @@ impl Difficulty {
         }
     }
 
+    /// Multiplier on enemy health.
+    pub fn enemy_health(self) -> f32 {
+        match self {
+            Difficulty::Easy => 0.8,
+            Difficulty::Normal => 1.0,
+            Difficulty::Hard => 1.3,
+        }
+    }
+
     pub fn next(self) -> Difficulty {
         match self {
             Difficulty::Easy => Difficulty::Normal,
