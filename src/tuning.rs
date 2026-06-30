@@ -205,10 +205,10 @@ pub const SENTINEL_WINDUP: f32 = 0.4;
 pub const SENTINEL_SCORE: u32 = 160;
 pub const SENTINEL_WIDTH: f32 = 1.5;
 pub const SENTINEL_HEIGHT: f32 = 1.5;
-pub const SENTINEL_HOVER: f32 = 3.4;
+pub const SENTINEL_HOVER: f32 = 2.2;
 
 // Enemy animation
-pub const ANIM_FPS: f32 = 7.0;
+pub const ANIM_FPS: f32 = 9.0;
 
 // Caster
 pub const CASTER_HEALTH: f32 = 22.0;

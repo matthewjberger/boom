@@ -7,7 +7,7 @@ pub struct Sprite {
 const SCALE: u32 = 8;
 
 /// Number of procedurally generated animation frames per enemy.
-pub const ANIM_FRAMES: usize = 3;
+pub const ANIM_FRAMES: usize = 4;
 
 const IMP: &[&str] = &[
     "...nn........nn.",
@@ -58,17 +58,20 @@ const GARGOYLE: &[&str] = &[
     "...dd.dd...",
 ];
 
+// A floating eye with a heavy scowling brow and a hot red pupil, so it reads as
+// an angry sentinel rather than a plain teal orb.
 const SENTINEL: &[&str] = &[
-    "...ooooo...",
-    "..ottttto..",
-    ".ottttttto.",
+    "..bbbbbb...",
+    ".bbbbbbbbb.",
     "ottttttttto",
-    "ottteeettto",
-    "ottteeettto",
+    "otttwwwttto",
+    "ottwwrwwtto",
+    "otwwrrrwwto",
+    "ottwwrwwtto",
+    "otttwwwttto",
     "ottttttttto",
     ".ottttttto.",
-    "..ottttto..",
-    "...ooooo...",
+    "..ooooooo..",
 ];
 
 const CASTER: &[&str] = &[
@@ -198,8 +201,10 @@ pub fn gargoyle_hurt() -> Sprite {
 fn sentinel_color(symbol: char, hurt: bool) -> [u8; 4] {
     let base = match symbol {
         'o' => [10, 28, 32, 255],
+        'b' => [8, 16, 20, 255],
         't' => [40, 150, 160, 255],
-        'e' => [180, 255, 255, 255],
+        'w' => [200, 255, 255, 255],
+        'r' => [255, 70, 40, 255],
         _ => [0, 0, 0, 0],
     };
     brighten(base, hurt)
@@ -280,7 +285,9 @@ fn offset(base: &Sprite, dx: i32, dy: i32) -> Sprite {
 /// Produce animation frame `index` from a base sprite: a small up-bob with a
 /// left/right sway that reads as breathing when idle and a stride when moving.
 pub fn frame(base: &Sprite, index: usize) -> Sprite {
-    const TABLE: [(i32, i32); ANIM_FRAMES] = [(0, 0), (1, -3), (-1, -1)];
+    // A fuller bob-and-sway cycle (rise, peak, fall, settle) at a bigger amplitude
+    // than before, so idle enemies visibly breathe and moving ones bounce.
+    const TABLE: [(i32, i32); ANIM_FRAMES] = [(0, 0), (2, -5), (0, -9), (-2, -5)];
     let (dx, dy) = TABLE[index % ANIM_FRAMES];
     offset(base, dx, dy)
 }
