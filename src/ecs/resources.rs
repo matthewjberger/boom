@@ -14,6 +14,31 @@ pub enum Screen {
     InGame,
     Paused,
     Editor,
+    Cutscene,
+}
+
+/// What to do once the player clicks through the current cutscene.
+#[derive(Clone, Copy, Default)]
+pub enum StoryNext {
+    #[default]
+    Title,
+    StartMission(usize),
+}
+
+#[derive(Clone, Default)]
+pub struct StorySlide {
+    pub title: String,
+    pub body: String,
+}
+
+/// Story-mode campaign progress and the cutscene currently on screen.
+#[derive(Default)]
+pub struct StoryState {
+    pub active: bool,
+    pub mission: usize,
+    pub slides: Vec<StorySlide>,
+    pub slide_index: usize,
+    pub after: StoryNext,
 }
 
 #[derive(Default)]
@@ -161,6 +186,9 @@ pub struct LevelState {
     /// spawn points, and the exit returns to the editor rather than cycling).
     pub custom: bool,
     pub custom_spawns: Vec<(f32, f32)>,
+    /// True while playing a Story-mode mission; the exit advances the campaign.
+    pub story: bool,
+    pub objective: crate::campaign::Objective,
 }
 
 /// In-editor authoring state: the level being built, its live preview entities,
@@ -214,6 +242,7 @@ pub struct AudioPool {
 #[derive(Default)]
 pub struct TitleHandles {
     pub root: Entity,
+    pub story_button: Entity,
     pub play_button: Entity,
     pub level_select_button: Entity,
     pub editor_button: Entity,
@@ -259,6 +288,14 @@ pub struct EditorHandles {
     pub status: Entity,
 }
 
+#[derive(Default, Clone, Copy)]
+pub struct CutsceneHandles {
+    pub root: Entity,
+    pub title: Entity,
+    pub body: Entity,
+    pub hint: Entity,
+}
+
 #[derive(Default)]
 pub struct UiHandles {
     pub title: TitleHandles,
@@ -266,4 +303,5 @@ pub struct UiHandles {
     pub pause: PauseHandles,
     pub hud: HudHandles,
     pub editor: EditorHandles,
+    pub cutscene: CutsceneHandles,
 }

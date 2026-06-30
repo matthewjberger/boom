@@ -202,6 +202,8 @@ pub fn update(boomer_world: &BoomerWorld, world: &mut World) {
     let definition = content::level(level.index);
     let level_name = if level.custom {
         "CUSTOM"
+    } else if level.story {
+        crate::campaign::mission(boomer_world.resources.story.mission).title
     } else {
         definition.name
     };
@@ -243,7 +245,8 @@ pub fn update(boomer_world: &BoomerWorld, world: &mut World) {
     );
 
     let dead = in_game && matches!(phase, Phase::Dead);
-    let exit_open = playing && level.exit_active;
+    let reach = level.story && matches!(level.objective, crate::campaign::Objective::Reach);
+    let exit_open = playing && level.exit_active && level.banner > 0.0;
     let intro = playing && level.banner > 0.0 && !exit_open;
     let show_status = dead || exit_open || intro;
     ui_set_visible(world, hud.status_label, show_status);
@@ -260,8 +263,13 @@ pub fn update(boomer_world: &BoomerWorld, world: &mut World) {
         );
         set_color(world, hud.status_label, HEALTH);
     } else if exit_open {
-        ui_set_text(world, hud.status_label, "LEVEL CLEAR");
-        ui_set_text(world, hud.hint_label, "REACH THE GREEN GATE");
+        let (status_text, hint_text) = if reach {
+            ("REACH THE GATE", "RUN TO THE GREEN GATE")
+        } else {
+            ("LEVEL CLEAR", "REACH THE GREEN GATE")
+        };
+        ui_set_text(world, hud.status_label, status_text);
+        ui_set_text(world, hud.hint_label, hint_text);
         set_color(world, hud.status_label, vec4(0.4, 1.0, 0.6, 1.0));
     } else if intro {
         ui_set_text(world, hud.status_label, level_name);

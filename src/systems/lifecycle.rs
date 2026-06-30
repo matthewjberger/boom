@@ -1,5 +1,5 @@
 use crate::ecs::{BoomerWorld, Screen, UiHandles};
-use crate::systems::screens::{hud, level_select, pause, title};
+use crate::systems::screens::{cutscene, hud, level_select, pause, title};
 use crate::systems::world::{audio, game, player, textures};
 use nightshade::ecs::graphics::resources::ColorGradingPreset;
 use nightshade::prelude::*;
@@ -26,12 +26,14 @@ pub fn initialize(boomer_world: &mut BoomerWorld, world: &mut World) {
     let pause_handles = pause::build(&mut tree);
     let hud_handles = hud::build(&mut tree);
     let editor_handles = crate::systems::editor::build_ui(&mut tree);
+    let cutscene_handles = cutscene::build(&mut tree);
     tree.finish();
     boomer_world.resources.ui_handles.title = title_handles;
     boomer_world.resources.ui_handles.level_select = level_select_handles;
     boomer_world.resources.ui_handles.pause = pause_handles;
     boomer_world.resources.ui_handles.hud = hud_handles;
     boomer_world.resources.ui_handles.editor = editor_handles;
+    boomer_world.resources.ui_handles.cutscene = cutscene_handles;
 
     enter(boomer_world, world, Screen::Title);
 }
@@ -68,7 +70,7 @@ fn screen_config(handles: &UiHandles, screen: Screen) -> ScreenConfig {
             physics_enabled: false,
             cursor_locked: false,
             gamepad_nav: true,
-            focus: Some(handles.title.play_button),
+            focus: Some(handles.title.story_button),
         },
         Screen::LevelSelect => ScreenConfig {
             physics_enabled: false,
@@ -94,6 +96,12 @@ fn screen_config(handles: &UiHandles, screen: Screen) -> ScreenConfig {
             gamepad_nav: false,
             focus: None,
         },
+        Screen::Cutscene => ScreenConfig {
+            physics_enabled: false,
+            cursor_locked: false,
+            gamepad_nav: false,
+            focus: None,
+        },
     }
 }
 
@@ -113,4 +121,9 @@ fn apply_visibility(boomer_world: &BoomerWorld, world: &mut World) {
         matches!(screen, Screen::InGame | Screen::Paused),
     );
     ui_set_visible(world, handles.editor.root, matches!(screen, Screen::Editor));
+    ui_set_visible(
+        world,
+        handles.cutscene.root,
+        matches!(screen, Screen::Cutscene),
+    );
 }

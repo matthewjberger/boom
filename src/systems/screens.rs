@@ -1,3 +1,4 @@
+pub mod cutscene;
 pub mod hud;
 pub mod level_select;
 pub mod menu_button;

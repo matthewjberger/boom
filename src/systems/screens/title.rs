@@ -14,6 +14,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
         .with_intro(UiAnimationType::Fade, 0.4)
         .entity();
 
+    let mut story_button = Entity::default();
     let mut play_button = Entity::default();
     let mut level_select_button = Entity::default();
     let mut editor_button = Entity::default();
@@ -52,14 +53,15 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
         let menu_column = tree
             .add_node()
             .window(
-                Rl(vec2(50.0, 100.0)) + Ab(vec2(0.0, -96.0)),
-                Ab(vec2(MENU_BUTTON_SIZE.x, 224.0)),
+                Rl(vec2(50.0, 100.0)) + Ab(vec2(0.0, -72.0)),
+                Ab(vec2(MENU_BUTTON_SIZE.x, 280.0)),
                 Anchor::BottomCenter,
             )
             .flow(FlowDirection::Vertical, 8.0, 8.0)
             .entity();
         tree.in_parent(menu_column, |tree| {
-            play_button = menu_button::build(tree, "PLAY");
+            story_button = menu_button::build(tree, "STORY");
+            play_button = menu_button::build(tree, "ARCADE");
             level_select_button = menu_button::build(tree, "SELECT LEVEL");
             editor_button = menu_button::build(tree, "LEVEL EDITOR");
             quit_button = menu_button::build(tree, "QUIT");
@@ -82,6 +84,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
 
     TitleHandles {
         root,
+        story_button,
         play_button,
         level_select_button,
         editor_button,
@@ -93,16 +96,20 @@ pub fn handle_input(boomer_world: &mut BoomerWorld, world: &mut World) {
     if !matches!(boomer_world.resources.screen.current, Screen::Title) {
         return;
     }
+    let story = boomer_world.resources.ui_handles.title.story_button;
     let play = boomer_world.resources.ui_handles.title.play_button;
     let level_select = boomer_world.resources.ui_handles.title.level_select_button;
     let editor = boomer_world.resources.ui_handles.title.editor_button;
     let quit = boomer_world.resources.ui_handles.title.quit_button;
+    let mut clicked_story = false;
     let mut clicked_play = false;
     let mut clicked_level_select = false;
     let mut clicked_editor = false;
     let mut clicked_quit = false;
     for entity in ui_button_clicks(world) {
-        if entity == play {
+        if entity == story {
+            clicked_story = true;
+        } else if entity == play {
             clicked_play = true;
         } else if entity == level_select {
             clicked_level_select = true;
@@ -112,7 +119,9 @@ pub fn handle_input(boomer_world: &mut BoomerWorld, world: &mut World) {
             clicked_quit = true;
         }
     }
-    if clicked_play {
+    if clicked_story {
+        crate::systems::story::begin(boomer_world, world);
+    } else if clicked_play {
         lifecycle::enter(boomer_world, world, Screen::InGame);
     } else if clicked_level_select {
         lifecycle::enter(boomer_world, world, Screen::LevelSelect);

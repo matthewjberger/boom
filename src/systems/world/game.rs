@@ -1,3 +1,4 @@
+use crate::campaign::{self, Objective};
 use crate::content;
 use crate::ecs::{BoomerWorld, EnemyKind, Phase, SpawnEntry};
 use crate::systems::common::{combo_multiplier, next_random, random_range};
@@ -35,6 +36,8 @@ pub fn load_level(boomer_world: &mut BoomerWorld, world: &mut World, absolute_in
 
     let count = content::count();
     boomer_world.resources.level.custom = false;
+    boomer_world.resources.level.story = false;
+    boomer_world.resources.level.objective = Objective::Exterminate;
     boomer_world.resources.level.index = absolute_index % count;
     boomer_world.resources.level.cycle = (absolute_index / count) as u32;
     boomer_world.resources.level.banner = BANNER_TIME;
@@ -102,6 +105,7 @@ pub fn start_custom(boomer_world: &mut BoomerWorld, world: &mut World) {
 
     let data = boomer_world.resources.editor.data.clone();
     boomer_world.resources.level.custom = true;
+    boomer_world.resources.level.story = false;
     boomer_world.resources.level.index = 0;
     boomer_world.resources.level.cycle = 0;
     boomer_world.resources.level.banner = BANNER_TIME;
@@ -137,6 +141,69 @@ pub fn start_custom(boomer_world: &mut BoomerWorld, world: &mut World) {
     boomer_world.resources.level.wave_count = tuning::WAVES_PER_LEVEL as u32;
 
     pickups::spawn_initial(boomer_world, world);
+}
+
+/// Start a Story-mode mission: a static level framed by an objective.
+pub fn start_mission(boomer_world: &mut BoomerWorld, world: &mut World, index: usize) {
+    if !boomer_world.resources.game.seeded {
+        let uptime = world.resources.window.timing.uptime_milliseconds;
+        boomer_world.resources.game.random_state = 0x9e37_79b9_7f4a_7c15 ^ (uptime | 1);
+        boomer_world.resources.game.best_score = load_best();
+        boomer_world.resources.game.seeded = true;
+    }
+    reset_core(boomer_world);
+    teardown_world(boomer_world, world);
+
+    let mission = campaign::mission(index);
+    let definition = content::level(mission.level);
+    boomer_world.resources.level.custom = false;
+    boomer_world.resources.level.story = true;
+    boomer_world.resources.level.objective = mission.objective;
+    boomer_world.resources.level.index = mission.level;
+    boomer_world.resources.level.cycle = 0;
+    boomer_world.resources.level.banner = BANNER_TIME;
+
+    level::build(boomer_world, world, definition);
+    let spawn = vec3(
+        definition.spawn[0],
+        definition.spawn[1],
+        definition.spawn[2],
+    );
+    player::teleport(boomer_world, world, spawn);
+
+    let roster = definition.roster;
+    let mut waves = build_waves(
+        boomer_world,
+        roster.imps,
+        roster.swarmers,
+        roster.casters,
+        roster.brutes,
+        roster.gargoyles,
+        0,
+    );
+    if mission.objective == Objective::Boss {
+        if let Some(last) = waves.last_mut() {
+            last.push((EnemyKind::Brute, true));
+        } else {
+            waves.push(vec![(EnemyKind::Brute, true)]);
+        }
+    }
+    let first = if waves.is_empty() {
+        Vec::new()
+    } else {
+        waves.remove(0)
+    };
+    boomer_world.resources.game.waves = waves;
+    boomer_world.resources.game.spawn_queue = first;
+    boomer_world.resources.game.spawn_timer = 0.6;
+    boomer_world.resources.level.wave = 1;
+    boomer_world.resources.level.wave_count = tuning::WAVES_PER_LEVEL as u32;
+
+    pickups::spawn_initial(boomer_world, world);
+
+    if mission.objective == Objective::Reach {
+        level::open_exit(boomer_world, world);
+    }
 }
 
 pub fn award(boomer_world: &mut BoomerWorld, base: u32) {
@@ -240,7 +307,9 @@ pub fn tick(boomer_world: &mut BoomerWorld, world: &mut World) {
         let mut offset = player_position - boomer_world.resources.level.exit_position;
         offset.y = 0.0;
         if offset.norm() < EXIT_RADIUS {
-            if boomer_world.resources.level.custom {
+            if boomer_world.resources.level.story {
+                crate::systems::story::mission_complete(boomer_world, world);
+            } else if boomer_world.resources.level.custom {
                 crate::systems::editor::open(boomer_world, world);
             } else {
                 let next = boomer_world.resources.level.cycle as usize * content::count()

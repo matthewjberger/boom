@@ -22,6 +22,7 @@ freecs::ecs! {
         game: GameState,
         level: LevelState,
         editor: EditorState,
+        story: StoryState,
         projectiles: ProjectileState,
         transient: TransientState,
         audio: AudioPool,

@@ -19,6 +19,7 @@ impl State for Boomer {
         systems::screens::title::handle_input(&mut self.boomer_world, world);
         systems::screens::level_select::handle_input(&mut self.boomer_world, world);
         systems::screens::pause::handle_input(&mut self.boomer_world, world);
+        systems::screens::cutscene::handle_input(&mut self.boomer_world, world);
 
         if matches!(self.boomer_world.resources.screen.current, Screen::Editor) {
             systems::editor::update(&mut self.boomer_world, world);
@@ -55,5 +56,6 @@ impl State for Boomer {
 
         systems::world::audio::tick(&mut self.boomer_world, world);
         systems::screens::hud::update(&self.boomer_world, world);
+        systems::screens::cutscene::update(&self.boomer_world, world);
     }
 }
