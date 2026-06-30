@@ -18,6 +18,22 @@ pub const COMBO_SPEED_PER_STEP: f32 = 0.06;
 pub const PAD_RADIUS: f32 = 1.6;
 pub const PAD_IMPULSE: f32 = 13.5;
 
+// Wallrunning (ported from the nightshade movement demo, tuned to boom's speed)
+pub const WALL_DETECT_DISTANCE: f32 = 0.8;
+pub const WALL_RUN_MIN_SPEED: f32 = 6.0;
+pub const WALL_RUN_DURATION: f32 = 1.5;
+pub const WALL_RUN_FALL_RATE: f32 = -1.6;
+pub const WALL_RUN_SPEED: f32 = 14.0;
+pub const WALL_RUN_FORWARD_BOOST: f32 = 2.0;
+pub const WALL_RUN_STICK: f32 = 4.0;
+pub const WALL_RUN_COOLDOWN: f32 = 0.22;
+pub const WALL_RUN_CAMERA_TILT: f32 = 0.16;
+pub const WALL_RUN_TILT_LERP: f32 = 14.0;
+pub const WALL_RUN_FOV_POP: f32 = 6.0;
+pub const WALL_JUMP_LATERAL: f32 = 12.0;
+pub const WALL_JUMP_VERTICAL: f32 = 11.5;
+pub const WALL_JUMP_FORWARD: f32 = 7.0;
+
 // Dash
 pub const DASH_SPEED: f32 = 26.0;
 pub const DASH_TIME: f32 = 0.13;

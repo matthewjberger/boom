@@ -74,7 +74,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
                 Anchor::Center,
             )
             .with_text(
-                "MOVE WASD  /  SHOOT LMB  /  DASH CTRL  /  STRAFE-JUMP SPACE  /  WEAPONS 1-3  /  ROCKET-JUMP DOWN+3  /  PAUSE ESC  (full gamepad support)",
+                "WASD  /  SHOOT LMB  /  DASH CTRL  /  STRAFE-JUMP & WALL-RUN SPACE  /  WEAPONS 1-3  /  ROCKET-JUMP DOWN+3  /  PAUSE ESC",
                 12.0,
             )
             .text_center()

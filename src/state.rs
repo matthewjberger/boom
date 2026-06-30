@@ -40,6 +40,7 @@ impl State for Boomer {
             };
 
             if playing && !frozen {
+                systems::world::player::pre_look(&self.boomer_world, world);
                 first_person_camera_look_system(world);
                 systems::world::player::movement(&mut self.boomer_world, world);
                 systems::world::weapon::update(&mut self.boomer_world, world);

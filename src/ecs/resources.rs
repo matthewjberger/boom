@@ -54,6 +54,14 @@ pub struct PlayerState {
     pub dash_cooldown: f32,
     pub dash_dir: Vec3,
     pub iframes: f32,
+    /// Wallrun state: which side the wall is on (-1 left, 1 right, 0 none), how
+    /// long the run can last, the cooldown after it ends, the wall normal, and
+    /// the lerped camera roll currently baked into the view.
+    pub wall_run_side: i8,
+    pub wall_run_timer: f32,
+    pub wall_run_cooldown: f32,
+    pub wall_run_normal: Vec3,
+    pub wall_run_tilt: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

@@ -1,12 +1,13 @@
-use crate::ecs::BoomerWorld;
+use crate::ecs::{BoomerWorld, Phase};
 use crate::systems::common::{approach, combo_multiplier};
 use crate::systems::world::audio;
 use crate::systems::world::level::PLAYER_SPAWN;
 use crate::tuning;
-use nalgebra_glm::{Vec3, dot, vec3};
+use nalgebra_glm::{Vec3, dot, quat_angle_axis, vec3};
 use nightshade::ecs::camera::components::{PerspectiveCamera, Projection};
 use nightshade::ecs::input::queries::query_active_gamepad;
 use nightshade::ecs::physics::commands::spawn_first_person_player;
+use nightshade::ecs::physics::resources::physics_world_cast_ray;
 use nightshade::prelude::*;
 
 const CAMERA_BASE_HEIGHT: f32 = 1.05;
@@ -47,6 +48,8 @@ pub fn movement(boomer_world: &mut BoomerWorld, world: &mut World) {
     let state = &mut boomer_world.resources.player;
     state.dash_cooldown = (state.dash_cooldown - delta).max(0.0);
     state.iframes = (state.iframes - delta).max(0.0);
+    state.wall_run_cooldown = (state.wall_run_cooldown - delta).max(0.0);
+    state.wall_run_timer = (state.wall_run_timer - delta).max(0.0);
 
     let keyboard = &world.resources.input.keyboard;
     let mut forward_input = axis(
@@ -148,7 +151,23 @@ pub fn movement(boomer_world: &mut BoomerWorld, world: &mut World) {
         velocity.z = horizontal.z;
     }
 
-    if grounded && jump {
+    let wall_jumped = apply_wallrun(
+        boomer_world,
+        world,
+        &mut velocity,
+        &WallrunInput {
+            player,
+            grounded,
+            dashing,
+            forward,
+            right,
+            position: player_position,
+            jump,
+            delta,
+        },
+    );
+
+    if grounded && jump && !wall_jumped {
         velocity.y = tuning::JUMP_IMPULSE;
     }
 
@@ -197,6 +216,150 @@ fn pad_launch(boomer_world: &BoomerWorld, player_position: Vec3) -> bool {
     })
 }
 
+struct WallrunInput {
+    player: Entity,
+    grounded: bool,
+    dashing: bool,
+    forward: Vec3,
+    right: Vec3,
+    position: Vec3,
+    jump: bool,
+    delta: f32,
+}
+
+/// Stick to a wall mid-air and run along it, with a slow controlled fall and an
+/// explosive wall-jump off it. Mirrors the nightshade movement demo's wallrun.
+fn apply_wallrun(
+    boomer_world: &mut BoomerWorld,
+    world: &World,
+    velocity: &mut Vec3,
+    input: &WallrunInput,
+) -> bool {
+    if input.grounded || input.dashing {
+        boomer_world.resources.player.wall_run_side = 0;
+        return false;
+    }
+
+    let speed = (velocity.x * velocity.x + velocity.z * velocity.z).sqrt();
+
+    if boomer_world.resources.player.wall_run_side != 0 && input.jump {
+        let normal = boomer_world.resources.player.wall_run_normal;
+        let mut flat = vec3(normal.x, 0.0, normal.z);
+        flat = if flat.norm() > 1e-3 {
+            flat.normalize()
+        } else {
+            -input.forward
+        };
+        velocity.x =
+            flat.x * tuning::WALL_JUMP_LATERAL + input.forward.x * tuning::WALL_JUMP_FORWARD;
+        velocity.z =
+            flat.z * tuning::WALL_JUMP_LATERAL + input.forward.z * tuning::WALL_JUMP_FORWARD;
+        velocity.y = tuning::WALL_JUMP_VERTICAL;
+        let state = &mut boomer_world.resources.player;
+        state.wall_run_side = 0;
+        state.wall_run_timer = 0.0;
+        state.wall_run_cooldown = tuning::WALL_RUN_COOLDOWN;
+        return true;
+    }
+
+    if boomer_world.resources.player.wall_run_cooldown > 0.0 || speed < tuning::WALL_RUN_MIN_SPEED {
+        clear_wallrun(boomer_world);
+        return false;
+    }
+
+    let origin = input.position + vec3(0.0, 0.3, 0.0);
+    let ignore = Some(input.player);
+    let (side, normal) = if let Some(normal) = cast_wall(world, origin, input.right, ignore) {
+        (1i8, normal)
+    } else if let Some(normal) = cast_wall(world, origin, -input.right, ignore) {
+        (-1i8, normal)
+    } else {
+        clear_wallrun(boomer_world);
+        return false;
+    };
+
+    let changed = boomer_world.resources.player.wall_run_side != side;
+    if changed {
+        boomer_world.resources.player.wall_run_timer = tuning::WALL_RUN_DURATION;
+    }
+    boomer_world.resources.player.wall_run_side = side;
+    boomer_world.resources.player.wall_run_normal = normal;
+
+    if boomer_world.resources.player.wall_run_timer <= 0.0 {
+        clear_wallrun(boomer_world);
+        return false;
+    }
+
+    let along = wall_along(normal, input.forward);
+    if changed {
+        let entry = speed.max(tuning::WALL_RUN_SPEED) + tuning::WALL_RUN_FORWARD_BOOST;
+        velocity.x = along.x * entry;
+        velocity.z = along.z * entry;
+        if velocity.y < 0.0 {
+            velocity.y = velocity.y.max(tuning::WALL_RUN_FALL_RATE);
+        }
+    } else {
+        let run = speed.max(tuning::WALL_RUN_SPEED);
+        velocity.x = along.x * run - normal.x * tuning::WALL_RUN_STICK * input.delta;
+        velocity.z = along.z * run - normal.z * tuning::WALL_RUN_STICK * input.delta;
+        velocity.y = tuning::WALL_RUN_FALL_RATE;
+    }
+    false
+}
+
+fn clear_wallrun(boomer_world: &mut BoomerWorld) {
+    if boomer_world.resources.player.wall_run_side != 0 {
+        boomer_world.resources.player.wall_run_side = 0;
+        boomer_world.resources.player.wall_run_cooldown = tuning::WALL_RUN_COOLDOWN;
+    }
+}
+
+fn cast_wall(world: &World, origin: Vec3, direction: Vec3, ignore: Option<Entity>) -> Option<Vec3> {
+    physics_world_cast_ray(
+        &world.resources.physics,
+        origin,
+        direction,
+        tuning::WALL_DETECT_DISTANCE,
+        ignore,
+    )
+    .filter(|hit| hit.normal.y.abs() < 0.35 && hit.normal.norm() > 0.1)
+    .map(|hit| hit.normal)
+}
+
+/// The horizontal direction along a wall (perpendicular to its normal) that
+/// points the same way the player is looking.
+fn wall_along(normal: Vec3, forward: Vec3) -> Vec3 {
+    let mut flat = vec3(normal.x, 0.0, normal.z);
+    if flat.norm() < 1e-4 {
+        return forward;
+    }
+    flat = flat.normalize();
+    let along = vec3(-flat.z, 0.0, flat.x);
+    if dot(&along, &forward) >= dot(&-along, &forward) {
+        along
+    } else {
+        -along
+    }
+}
+
+/// Strip the wallrun camera roll before the look system reads the rotation, so
+/// yaw/pitch stay clean and the roll is re-applied fresh each frame.
+pub fn pre_look(boomer_world: &BoomerWorld, world: &mut World) {
+    let tilt = boomer_world.resources.player.wall_run_tilt;
+    if tilt.abs() < 1e-5 {
+        return;
+    }
+    let Some(camera) = boomer_world.resources.player.camera_entity else {
+        return;
+    };
+    if let Some(transform) = world.core.get_local_transform_mut(camera) {
+        transform.rotation *= quat_angle_axis(-tilt, &vec3(0.0, 0.0, 1.0));
+    }
+    world
+        .core
+        .set_local_transform_dirty(camera, LocalTransformDirty);
+}
+
 pub fn apply_camera_feel(boomer_world: &mut BoomerWorld, world: &mut World) {
     let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
     let Some(camera) = boomer_world.resources.player.camera_entity else {
@@ -206,6 +369,10 @@ pub fn apply_camera_feel(boomer_world: &mut BoomerWorld, world: &mut World) {
         return;
     };
 
+    let active = matches!(boomer_world.resources.game.phase, Phase::Playing)
+        && boomer_world.resources.game.hitstop <= 0.0;
+    let wall_side = boomer_world.resources.player.wall_run_side;
+
     let game = &mut boomer_world.resources.game;
     game.shake = approach(game.shake, 0.0, tuning::SHAKE_DECAY * delta);
     game.cam_kick = approach(game.cam_kick, 0.0, tuning::KICK_DECAY * delta);
@@ -214,6 +381,25 @@ pub fn apply_camera_feel(boomer_world: &mut BoomerWorld, world: &mut World) {
     let shake = game.shake.min(1.4);
     let cam_kick = game.cam_kick;
     let fov_pop = game.fov_pop;
+
+    let target_tilt = if active {
+        match wall_side {
+            1 => tuning::WALL_RUN_CAMERA_TILT,
+            -1 => -tuning::WALL_RUN_CAMERA_TILT,
+            _ => 0.0,
+        }
+    } else {
+        0.0
+    };
+    let tilt_lerp = (delta * tuning::WALL_RUN_TILT_LERP).clamp(0.0, 1.0);
+    let current_tilt = boomer_world.resources.player.wall_run_tilt;
+    let tilt = current_tilt + (target_tilt - current_tilt) * tilt_lerp;
+    boomer_world.resources.player.wall_run_tilt = tilt;
+    let wall_fov = if active && wall_side != 0 {
+        tuning::WALL_RUN_FOV_POP
+    } else {
+        0.0
+    };
 
     let elapsed = world.resources.window.timing.uptime_milliseconds as f32 / 1000.0;
     let speed = world
@@ -248,6 +434,9 @@ pub fn apply_camera_feel(boomer_world: &mut BoomerWorld, world: &mut World) {
             CAMERA_BASE_HEIGHT + shake_y + bob_v - cam_kick,
             shake_z,
         );
+        if active && tilt.abs() > 1e-5 {
+            transform.rotation *= quat_angle_axis(tilt, &vec3(0.0, 0.0, 1.0));
+        }
     }
     world
         .core
@@ -256,7 +445,7 @@ pub fn apply_camera_feel(boomer_world: &mut BoomerWorld, world: &mut World) {
     if let Some(camera_data) = world.core.get_camera_mut(camera)
         && let Projection::Perspective(ref mut perspective) = camera_data.projection
     {
-        perspective.y_fov_rad = (tuning::FOV_BASE_DEGREES + fov_pop).to_radians();
+        perspective.y_fov_rad = (tuning::FOV_BASE_DEGREES + fov_pop + wall_fov).to_radians();
     }
 }
 
