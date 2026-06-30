@@ -206,6 +206,18 @@ pub fn center(enemy: &Enemy) -> Vec3 {
     enemy.position + vec3(0.0, tuning::ENEMY_CENTER_HEIGHT, 0.0)
 }
 
+/// Hit volume for shots and splash: a sphere centred on the body mid-height and
+/// sized to the body half-width. A scaled-up elite — or the warlord, at 1.7x a
+/// brute — is then as hittable as it looks, instead of a fixed 0.75m bubble down
+/// at its feet that most shots sail clean over.
+pub fn hit_sphere(enemy: &Enemy) -> (Vec3, f32) {
+    let stats = stats(enemy.kind);
+    let scale = body_scale(&stats, enemy.elite, enemy.boss);
+    let center = enemy.position + vec3(0.0, scale.y * 0.5, 0.0);
+    let radius = (scale.x * 0.5).max(tuning::ENEMY_HIT_RADIUS);
+    (center, radius)
+}
+
 pub fn spawn(
     cobalt_world: &mut CobaltWorld,
     world: &mut World,

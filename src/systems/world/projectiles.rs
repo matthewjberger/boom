@@ -80,14 +80,15 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
     let player_entity = cobalt_world.resources.player.player_entity;
     let player_center = player::position(cobalt_world, world);
 
-    let enemy_targets: Vec<(Entity, Vec3)> = cobalt_world
+    let enemy_targets: Vec<(Entity, Vec3, f32)> = cobalt_world
         .query_entities(ENEMY)
         .filter_map(|game_entity| {
             let enemy = cobalt_world.get_enemy(game_entity)?;
             if enemy.state == EnemyState::Dying {
                 None
             } else {
-                Some((game_entity, enemies::center(enemy)))
+                let (center, radius) = enemies::hit_sphere(enemy);
+                Some((game_entity, center, radius))
             }
         })
         .collect();
@@ -125,9 +126,8 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
                 return false;
             }
         } else {
-            for (enemy_entity, center) in &enemy_targets {
-                if let Some(distance) =
-                    ray_sphere(start, direction, *center, tuning::ENEMY_HIT_RADIUS)
+            for (enemy_entity, center, radius) in &enemy_targets {
+                if let Some(distance) = ray_sphere(start, direction, *center, *radius)
                     && distance <= step
                 {
                     let point = start + direction * distance;
@@ -185,21 +185,22 @@ fn explode(cobalt_world: &mut CobaltWorld, world: &mut World, blast: &Blast) {
         .max(tuning::ROCKET_HITSTOP);
     audio::play(cobalt_world, world, audio::EXPLOSION, 1.0);
 
-    let targets: Vec<(Entity, Vec3)> = cobalt_world
+    let targets: Vec<(Entity, Vec3, f32)> = cobalt_world
         .query_entities(ENEMY)
         .filter_map(|game_entity| {
             let enemy = cobalt_world.get_enemy(game_entity)?;
             if enemy.state == EnemyState::Dying {
                 None
             } else {
-                Some((game_entity, enemies::center(enemy)))
+                let (center, body_radius) = enemies::hit_sphere(enemy);
+                Some((game_entity, center, body_radius))
             }
         })
         .collect();
 
-    for (enemy_entity, center) in targets {
+    for (enemy_entity, center, body_radius) in targets {
         let mut offset = center - blast.position;
-        let distance = offset.norm();
+        let distance = offset.norm() - body_radius;
         if distance >= radius {
             continue;
         }

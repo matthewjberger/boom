@@ -142,14 +142,15 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
         return;
     }
 
-    let targets: Vec<(Entity, Vec3)> = cobalt_world
+    let targets: Vec<(Entity, Vec3, f32)> = cobalt_world
         .query_entities(ENEMY)
         .filter_map(|game_entity| {
             let enemy = cobalt_world.get_enemy(game_entity)?;
             if enemy.state == EnemyState::Dying {
                 None
             } else {
-                Some((game_entity, enemies::center(enemy)))
+                let (center, radius) = enemies::hit_sphere(enemy);
+                Some((game_entity, center, radius))
             }
         })
         .collect();
@@ -170,8 +171,8 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
         .unwrap_or(tuning::WEAPON_RANGE);
 
         let mut hits: Vec<(Entity, Vec3)> = Vec::new();
-        for (game_entity, target) in &targets {
-            if let Some(distance) = ray_sphere(origin, direction, *target, tuning::ENEMY_HIT_RADIUS)
+        for (game_entity, target, radius) in &targets {
+            if let Some(distance) = ray_sphere(origin, direction, *target, *radius)
                 && distance < wall_distance
                 && distance < tuning::WEAPON_RANGE
             {
@@ -236,8 +237,8 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
         .unwrap_or(tuning::WEAPON_RANGE);
 
         let mut best: Option<(Entity, f32)> = None;
-        for (game_entity, target) in &targets {
-            if let Some(distance) = ray_sphere(origin, direction, *target, tuning::ENEMY_HIT_RADIUS)
+        for (game_entity, target, radius) in &targets {
+            if let Some(distance) = ray_sphere(origin, direction, *target, *radius)
                 && distance < wall_distance
                 && distance < tuning::WEAPON_RANGE
                 && best.map(|(_, current)| distance < current).unwrap_or(true)
