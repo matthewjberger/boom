@@ -4,7 +4,7 @@ use crate::systems::screens::menu_button;
 use crate::theme::*;
 use nightshade::prelude::*;
 
-const TITLE_TEXT: &str = "BOOMER";
+const TITLE_TEXT: &str = "BRIMSTONE";
 const SUBTITLE_TEXT: &str = "SURVIVE THE HORDE";
 
 pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {

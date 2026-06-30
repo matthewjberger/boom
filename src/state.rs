@@ -13,14 +13,14 @@ struct Shot {
 }
 
 #[derive(Default)]
-pub struct Boomer {
+pub struct Brimstone {
     pub boomer_world: BoomerWorld,
     shot: Option<Shot>,
 }
 
-impl State for Boomer {
+impl State for Brimstone {
     fn initialize(&mut self, world: &mut World) {
-        world.resources.window.title = "Boomer".to_string();
+        world.resources.window.title = "BRIMSTONE".to_string();
         if let Ok(spec) = std::env::var("BOOM_SHOT") {
             self.shot = Some(self.shot_init(world, &spec));
             return;
@@ -44,7 +44,7 @@ impl State for Boomer {
     }
 }
 
-impl Boomer {
+impl Brimstone {
     fn shot_init(&mut self, world: &mut World, spec: &str) -> Shot {
         let spec = spec.trim();
         let angled = spec.ends_with('a') || spec.ends_with('A');

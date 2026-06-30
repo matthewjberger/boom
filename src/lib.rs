@@ -1,4 +1,4 @@
-//! Boomer — a boomer-shooter built on the nightshade engine.
+//! BRIMSTONE — a boomer-shooter built on the nightshade engine.
 //!
 //! Movement is the soul of it: Quake-style strafe-jumping, a dash, jump pads,
 //! and wallrunning with wall-jumps. Three weapons (shotgun, nailgun, splash
@@ -24,4 +24,4 @@ mod systems;
 mod theme;
 mod tuning;
 
-pub use state::Boomer;
+pub use state::Brimstone;
