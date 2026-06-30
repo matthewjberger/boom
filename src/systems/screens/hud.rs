@@ -270,7 +270,8 @@ pub fn update(boomer_world: &BoomerWorld, world: &mut World) {
                 }
             }
         };
-        ui_set_text(world, hud.objective_label, &format!("> {text}"));
+        let compass = objective_compass(boomer_world, world, level);
+        ui_set_text(world, hud.objective_label, &format!("> {text}{compass}"));
     }
 
     let score_lit = lerp(
@@ -390,6 +391,66 @@ fn weapon_rack(weapon: &WeaponState) -> String {
         segment(WeaponKind::Nailgun, "2 NG"),
         segment(WeaponKind::Rocket, "3 RL"),
     )
+}
+
+/// A directional arrow + distance to the current navigation target (the open
+/// gate, or the keycard while it's still out there), relative to where the
+/// player is looking. Empty when there's nothing to navigate to.
+fn objective_compass(
+    boomer_world: &BoomerWorld,
+    world: &World,
+    level: &crate::ecs::LevelState,
+) -> String {
+    let target = if level.exit_active {
+        level.exit_position
+    } else if matches!(level.objective, crate::campaign::Objective::Keycard)
+        && !boomer_world.resources.game.has_key
+    {
+        let key = crate::campaign::mission(boomer_world.resources.story.mission).key;
+        nalgebra_glm::vec3(key[0], 0.0, key[2])
+    } else {
+        return String::new();
+    };
+
+    let Some(player) = boomer_world
+        .resources
+        .player
+        .player_entity
+        .and_then(|entity| world.core.get_local_transform(entity))
+        .map(|transform| transform.translation)
+    else {
+        return String::new();
+    };
+    let Some(camera) = boomer_world
+        .resources
+        .player
+        .camera_entity
+        .and_then(|entity| world.core.get_global_transform(entity))
+    else {
+        return String::new();
+    };
+
+    let mut to_target = target - player;
+    to_target.y = 0.0;
+    let distance = to_target.norm();
+    if distance < 0.5 {
+        return String::new();
+    }
+    let direction = to_target / distance;
+    let forward = camera.forward_vector();
+    let right = camera.right_vector();
+    let ahead = direction.x * forward.x + direction.z * forward.z;
+    let side = direction.x * right.x + direction.z * right.z;
+    let arrow = if ahead < -0.3 {
+        "v"
+    } else if side > 0.4 {
+        ">"
+    } else if side < -0.4 {
+        "<"
+    } else {
+        "^"
+    };
+    format!("    {arrow} {distance:.0}m")
 }
 
 fn set_color(world: &mut World, entity: Entity, color: Vec4) {
