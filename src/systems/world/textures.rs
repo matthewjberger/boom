@@ -31,6 +31,11 @@ pub const MAT_NPC_MERCHANT: &str = "brimstone_mat_npc_merchant";
 pub const MAT_NPC_ELDER: &str = "brimstone_mat_npc_elder";
 pub const MAT_NPC_GUARD: &str = "brimstone_mat_npc_guard";
 
+pub const MAT_TRUNK: &str = "brimstone_mat_trunk";
+pub const MAT_FOLIAGE: &str = "brimstone_mat_foliage";
+pub const MAT_FOLIAGE_WARM: &str = "brimstone_mat_foliage_warm";
+pub const MAT_ROCK: &str = "brimstone_mat_rock";
+
 pub const BILLBOARD_MESH: &str = "brimstone_billboard";
 
 const PROTOTYPE_TEXTURES: &[(&str, &[u8])] = &[
@@ -117,6 +122,15 @@ pub fn load(world: &mut World) {
         beacon_material(vec3(1.7, 0.3, 0.3), 4.0),
     );
     register_material(world, MAT_GHOST, ghost_material());
+
+    register_material(world, MAT_TRUNK, solid_material([0.30, 0.20, 0.12], 0.9));
+    register_material(world, MAT_FOLIAGE, solid_material([0.16, 0.40, 0.15], 0.85));
+    register_material(
+        world,
+        MAT_FOLIAGE_WARM,
+        solid_material([0.55, 0.45, 0.12], 0.85),
+    );
+    register_material(world, MAT_ROCK, solid_material([0.38, 0.38, 0.43], 0.9));
 
     for (texture, name, sprite) in [
         (
@@ -251,6 +265,16 @@ pub fn beacon_material(color: Vec3, strength: f32) -> Material {
         emissive_factor: [color.x, color.y, color.z],
         emissive_strength: strength,
         roughness: 0.35,
+        metallic: 0.0,
+        ..Default::default()
+    }
+}
+
+/// A plain untextured PBR material in a solid colour, for scatter props.
+fn solid_material(color: [f32; 3], roughness: f32) -> Material {
+    Material {
+        base_color: [color[0], color[1], color[2], 1.0],
+        roughness,
         metallic: 0.0,
         ..Default::default()
     }

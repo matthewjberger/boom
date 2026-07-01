@@ -21,7 +21,8 @@ use crate::systems::world::textures::{
     MAT_EXIT, MAT_NPC_ELDER, MAT_NPC_GUARD, MAT_NPC_MERCHANT, MAT_NPC_VILLAGER,
 };
 use crate::systems::world::{
-    audio, billboard, enemies, fx, game, level, overworld, pickups, player, projectiles, weapon,
+    audio, billboard, enemies, fx, game, level, overworld, pickups, player, projectiles, scatter,
+    weapon,
 };
 use nalgebra_glm::{Vec3, vec3};
 use nightshade::ecs::camera::systems::first_person_camera_look_system;
@@ -342,6 +343,7 @@ fn teardown(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     enemies::despawn_all(brimstone_world, world);
     pickups::despawn_all(brimstone_world, world);
     projectiles::despawn_all(brimstone_world, world);
+    scatter::clear(&mut brimstone_world.resources.adventure.scatter, world);
     let npcs = std::mem::take(&mut brimstone_world.resources.adventure.npcs);
     for npc in npcs {
         despawn_recursive_immediate(world, npc.entity);
@@ -483,6 +485,11 @@ pub fn update(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     if AREAS[brimstone_world.resources.adventure.area].overworld {
         let center = player::position(brimstone_world, world);
         overworld::update(world, center);
+        scatter::update(
+            &mut brimstone_world.resources.adventure.scatter,
+            world,
+            center,
+        );
     }
     let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
     tick_timers(brimstone_world, delta);

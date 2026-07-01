@@ -511,6 +511,8 @@ pub struct AdventureState {
     /// The intro story beat has played for this run.
     pub intro_done: bool,
     pub rng: u64,
+    /// Streamed natural scatter (trees, rocks, bushes) for the open-world overworld.
+    pub scatter: crate::systems::world::scatter::ScatterState,
 }
 
 impl AdventureState {

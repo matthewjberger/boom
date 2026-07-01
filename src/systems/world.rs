@@ -8,6 +8,7 @@ pub mod overworld;
 pub mod pickups;
 pub mod player;
 pub mod projectiles;
+pub mod scatter;
 pub mod textures;
 pub mod viewmodel;
 pub mod weapon;
