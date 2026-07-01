@@ -770,11 +770,15 @@ fn dialogue_action(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
             let Some(quest) = def.quest else { return };
             match quest_state(brimstone_world, quest) {
                 QuestState::Available => {
-                    brimstone_world.resources.adventure.quests.push(QuestProgress {
-                        quest,
-                        state: QuestState::Active,
-                        count: 0,
-                    });
+                    brimstone_world
+                        .resources
+                        .adventure
+                        .quests
+                        .push(QuestProgress {
+                            quest,
+                            state: QuestState::Active,
+                            count: 0,
+                        });
                     let title = QUESTS[quest].title;
                     brimstone_world
                         .resources
@@ -818,7 +822,10 @@ fn buy_item(brimstone_world: &mut BrimstoneWorld, world: &mut World, slot: usize
     };
     let price = ITEMS[item].price;
     if brimstone_world.resources.adventure.gold < price {
-        brimstone_world.resources.adventure.notify("Not enough gold.");
+        brimstone_world
+            .resources
+            .adventure
+            .notify("Not enough gold.");
         audio::play(brimstone_world, world, audio::EMPTY, 0.5);
         return;
     }
@@ -840,8 +847,15 @@ fn use_potion(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
             .notify("Already at full health.");
         return;
     }
-    if !brimstone_world.resources.adventure.remove_item(ITEM_POTION, 1) {
-        brimstone_world.resources.adventure.notify("No draughts left.");
+    if !brimstone_world
+        .resources
+        .adventure
+        .remove_item(ITEM_POTION, 1)
+    {
+        brimstone_world
+            .resources
+            .adventure
+            .notify("No draughts left.");
         audio::play(brimstone_world, world, audio::EMPTY, 0.5);
         return;
     }

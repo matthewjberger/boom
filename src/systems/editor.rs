@@ -36,7 +36,12 @@ pub fn brush_size(kind: BlockKind) -> Vec3 {
 pub fn open(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     game::teardown_world(brimstone_world, world);
     let empty = brimstone_world.resources.editor.data.blocks.is_empty()
-        && brimstone_world.resources.editor.data.spawn_points.is_empty();
+        && brimstone_world
+            .resources
+            .editor
+            .data
+            .spawn_points
+            .is_empty();
     if empty {
         if let Some(data) = load_from_disk() {
             brimstone_world.resources.editor.data = data;
@@ -160,7 +165,8 @@ fn rebuild_markers(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
 
 pub fn update(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
-    brimstone_world.resources.editor.status = (brimstone_world.resources.editor.status - delta).max(0.0);
+    brimstone_world.resources.editor.status =
+        (brimstone_world.resources.editor.status - delta).max(0.0);
 
     first_person_camera_look_system(world);
     fly(brimstone_world, world, delta);
@@ -452,7 +458,11 @@ fn delete_block(brimstone_world: &mut BrimstoneWorld, world: &mut World, cursor:
     }
     if let Some((index, _)) = best {
         brimstone_world.resources.editor.data.blocks.remove(index);
-        let entity = brimstone_world.resources.editor.block_entities.remove(index);
+        let entity = brimstone_world
+            .resources
+            .editor
+            .block_entities
+            .remove(index);
         despawn_recursive_immediate(world, entity);
         status(brimstone_world, "DELETED");
     }
@@ -493,7 +503,12 @@ fn nearest(points: &[(f32, f32)], cursor: Vec3) -> Option<usize> {
 
 fn play(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     if brimstone_world.resources.editor.data.blocks.is_empty()
-        && brimstone_world.resources.editor.data.spawn_points.is_empty()
+        && brimstone_world
+            .resources
+            .editor
+            .data
+            .spawn_points
+            .is_empty()
     {
         status(brimstone_world, "PLACE SOMETHING FIRST");
         return;

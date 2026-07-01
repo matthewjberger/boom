@@ -204,7 +204,12 @@ pub fn load(world: &mut World) {
     }
 }
 
-pub fn play(brimstone_world: &mut BrimstoneWorld, world: &mut World, set: &[&'static str], volume: f32) {
+pub fn play(
+    brimstone_world: &mut BrimstoneWorld,
+    world: &mut World,
+    set: &[&'static str],
+    volume: f32,
+) {
     if set.is_empty() {
         return;
     }

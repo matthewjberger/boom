@@ -242,7 +242,13 @@ pub fn muzzle(
 
 /// Show only the active weapon (also used to hide everything off the game screen).
 pub fn set_active(brimstone_world: &BrimstoneWorld, world: &mut World, active: i32) {
-    for (index, group) in brimstone_world.resources.viewmodel.models.iter().enumerate() {
+    for (index, group) in brimstone_world
+        .resources
+        .viewmodel
+        .models
+        .iter()
+        .enumerate()
+    {
         let visible = index as i32 == active;
         for entity in group {
             world.core.set_visibility(*entity, Visibility { visible });

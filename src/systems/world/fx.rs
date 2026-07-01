@@ -13,7 +13,11 @@ const EXPLOSION_TTL: f32 = 3.8;
 const TRACER_TTL: f32 = 0.05;
 
 fn track(brimstone_world: &mut BrimstoneWorld, entity: Entity, ttl: f32) {
-    brimstone_world.resources.transient.items.push((entity, ttl));
+    brimstone_world
+        .resources
+        .transient
+        .items
+        .push((entity, ttl));
 }
 
 fn gradient(color: Vec3) -> ColorGradient {

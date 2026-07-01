@@ -119,8 +119,16 @@ pub fn load(world: &mut World) {
     register_material(world, MAT_GHOST, ghost_material());
 
     for (texture, name, sprite) in [
-        ("brimstone_npc_villager", MAT_NPC_VILLAGER, art::npc_villager()),
-        ("brimstone_npc_merchant", MAT_NPC_MERCHANT, art::npc_merchant()),
+        (
+            "brimstone_npc_villager",
+            MAT_NPC_VILLAGER,
+            art::npc_villager(),
+        ),
+        (
+            "brimstone_npc_merchant",
+            MAT_NPC_MERCHANT,
+            art::npc_merchant(),
+        ),
         ("brimstone_npc_elder", MAT_NPC_ELDER, art::npc_elder()),
         ("brimstone_npc_guard", MAT_NPC_GUARD, art::npc_guard()),
     ] {

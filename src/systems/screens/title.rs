@@ -76,7 +76,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> TitleHandles {
                 Anchor::Center,
             )
             .with_text(
-                "WASD  /  SHOOT LMB  /  DASH CTRL  /  STRAFE-JUMP & WALL-RUN SPACE  /  WEAPONS 1-4  /  ROCKET-JUMP DOWN+3  /  PAUSE ESC",
+                "WASD  /  SHOOT LMB  /  DASH CTRL  /  STRAFE-JUMP & WALL-RUN SPACE  /  WEAPONS 1-6  /  ROCKET-JUMP DOWN+3  /  PAUSE ESC",
                 12.0,
             )
             .text_center()
@@ -102,7 +102,11 @@ pub fn handle_input(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     let story = brimstone_world.resources.ui_handles.title.story_button;
     let play = brimstone_world.resources.ui_handles.title.play_button;
     let adventure = brimstone_world.resources.ui_handles.title.adventure_button;
-    let level_select = brimstone_world.resources.ui_handles.title.level_select_button;
+    let level_select = brimstone_world
+        .resources
+        .ui_handles
+        .title
+        .level_select_button;
     let editor = brimstone_world.resources.ui_handles.title.editor_button;
     let quit = brimstone_world.resources.ui_handles.title.quit_button;
     let mut clicked_story = false;

@@ -29,7 +29,12 @@ pub fn launch_mission(brimstone_world: &mut BrimstoneWorld, world: &mut World, i
         Vec::new()
     };
     slides.push(briefing_slide(index));
-    show(brimstone_world, world, slides, StoryNext::StartMission(index));
+    show(
+        brimstone_world,
+        world,
+        slides,
+        StoryNext::StartMission(index),
+    );
 }
 
 fn ensure_loaded(brimstone_world: &mut BrimstoneWorld) {

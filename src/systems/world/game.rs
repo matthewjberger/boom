@@ -238,7 +238,8 @@ pub fn tick(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
             }
         }
     }
-    brimstone_world.resources.level.banner = (brimstone_world.resources.level.banner - delta).max(0.0);
+    brimstone_world.resources.level.banner =
+        (brimstone_world.resources.level.banner - delta).max(0.0);
 
     decay_overheal(brimstone_world, delta);
     apply_pressure(brimstone_world, world, delta);
@@ -285,7 +286,10 @@ fn advance_wave(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
         brimstone_world.resources.level.wave += 1;
         brimstone_world.resources.level.banner = BANNER_TIME;
     } else if !brimstone_world.resources.level.exit_active
-        && !matches!(brimstone_world.resources.level.objective, Objective::Keycard)
+        && !matches!(
+            brimstone_world.resources.level.objective,
+            Objective::Keycard
+        )
     {
         level::open_exit(brimstone_world, world);
         brimstone_world.resources.level.banner = BANNER_TIME;
@@ -295,8 +299,10 @@ fn advance_wave(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
 
 /// Unlock the gate the moment the keycard is recovered.
 fn check_keycard(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
-    if matches!(brimstone_world.resources.level.objective, Objective::Keycard)
-        && brimstone_world.resources.game.has_key
+    if matches!(
+        brimstone_world.resources.level.objective,
+        Objective::Keycard
+    ) && brimstone_world.resources.game.has_key
         && !brimstone_world.resources.level.exit_active
     {
         level::open_exit(brimstone_world, world);
@@ -317,7 +323,8 @@ fn decay_overheal(brimstone_world: &mut BrimstoneWorld, delta: f32) {
 fn apply_pressure(brimstone_world: &mut BrimstoneWorld, world: &mut World, delta: f32) {
     brimstone_world.resources.game.since_kill += delta;
     let enemies_alive = enemies::total_count(brimstone_world) > 0;
-    let camping = enemies_alive && brimstone_world.resources.game.since_kill > tuning::PRESSURE_GRACE;
+    let camping =
+        enemies_alive && brimstone_world.resources.game.since_kill > tuning::PRESSURE_GRACE;
     if !camping {
         return;
     }
@@ -406,8 +413,8 @@ fn build_waves(
     ];
     for (kind, amount, can_elite) in spread {
         for _ in 0..amount {
-            let elite =
-                can_elite && next_random(&mut brimstone_world.resources.game.random_state) < fraction;
+            let elite = can_elite
+                && next_random(&mut brimstone_world.resources.game.random_state) < fraction;
             waves[cursor % count].push((kind, elite, false));
             cursor += 1;
         }

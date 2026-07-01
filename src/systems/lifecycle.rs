@@ -57,6 +57,7 @@ pub fn enter(brimstone_world: &mut BrimstoneWorld, world: &mut World, screen: Sc
     apply_visibility(brimstone_world, world);
     if !matches!(screen, Screen::InGame | Screen::Paused | Screen::Adventure) {
         viewmodel::set_active(brimstone_world, world, -1);
+        brimstone_world.resources.viewmodel.shown = -1;
     }
 
     world.resources.physics.enabled = config.physics_enabled;

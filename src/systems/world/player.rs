@@ -273,7 +273,9 @@ fn apply_wallrun(
         return true;
     }
 
-    if brimstone_world.resources.player.wall_run_cooldown > 0.0 || speed < tuning::WALL_RUN_MIN_SPEED {
+    if brimstone_world.resources.player.wall_run_cooldown > 0.0
+        || speed < tuning::WALL_RUN_MIN_SPEED
+    {
         clear_wallrun(brimstone_world);
         return false;
     }

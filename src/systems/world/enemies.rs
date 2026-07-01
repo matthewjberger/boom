@@ -1,5 +1,7 @@
 use crate::art;
-use crate::ecs::{BrimstoneWorld, ENEMY, ENGINE_ENTITY, Enemy, EnemyKind, EnemyState, EngineEntity};
+use crate::ecs::{
+    BrimstoneWorld, ENEMY, ENGINE_ENTITY, Enemy, EnemyKind, EnemyState, EngineEntity,
+};
 use crate::systems::common::random_range;
 use crate::systems::world::{audio, billboard, fx, game, pickups, player, projectiles};
 use crate::tuning;
@@ -336,10 +338,12 @@ pub fn damage(
         if boss {
             brimstone_world.resources.game.boss_entity = None;
             brimstone_world.resources.game.shake += 1.2;
-            brimstone_world.resources.game.hitstop = brimstone_world.resources.game.hitstop.max(0.12);
+            brimstone_world.resources.game.hitstop =
+                brimstone_world.resources.game.hitstop.max(0.12);
         } else if elite || matches!(kind, EnemyKind::Brute) {
             brimstone_world.resources.game.shake += 0.25;
-            brimstone_world.resources.game.hitstop = brimstone_world.resources.game.hitstop.max(0.04);
+            brimstone_world.resources.game.hitstop =
+                brimstone_world.resources.game.hitstop.max(0.04);
         }
         audio::play(brimstone_world, world, audio::ENEMY_DEATH, 1.0);
         pickups::maybe_drop(brimstone_world, world, position);
@@ -814,6 +818,7 @@ pub fn despawn_all(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     if !game_entities.is_empty() {
         brimstone_world.despawn_entities(&game_entities);
     }
+    brimstone_world.resources.game.boss_entity = None;
 }
 
 pub fn total_count(brimstone_world: &BrimstoneWorld) -> usize {

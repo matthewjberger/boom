@@ -28,12 +28,18 @@ impl Brimstone {
         systems::screens::pause::handle_input(&mut self.brimstone_world, world);
         systems::screens::cutscene::handle_input(&mut self.brimstone_world, world);
 
-        if matches!(self.brimstone_world.resources.screen.current, Screen::Editor) {
+        if matches!(
+            self.brimstone_world.resources.screen.current,
+            Screen::Editor
+        ) {
             systems::editor::update(&mut self.brimstone_world, world);
             systems::world::fx::tick(&mut self.brimstone_world, world);
         }
 
-        if matches!(self.brimstone_world.resources.screen.current, Screen::InGame) {
+        if matches!(
+            self.brimstone_world.resources.screen.current,
+            Screen::InGame
+        ) {
             let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
             let playing = matches!(self.brimstone_world.resources.game.phase, Phase::Playing);
             let frozen = {

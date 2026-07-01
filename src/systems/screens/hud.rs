@@ -485,7 +485,14 @@ fn objective_compass(
     } else if matches!(level.objective, crate::campaign::Objective::Keycard)
         && !brimstone_world.resources.game.has_key
     {
-        let key = crate::campaign::mission(brimstone_world.resources.story.mission).key;
+        let key = if level.story {
+            crate::campaign::mission(brimstone_world.resources.story.mission).key
+        } else {
+            let Some(key) = crate::content::level(level.index).key else {
+                return String::new();
+            };
+            key
+        };
         nalgebra_glm::vec3(key[0], 0.0, key[2])
     } else {
         return String::new();

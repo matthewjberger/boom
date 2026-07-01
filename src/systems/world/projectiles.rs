@@ -36,15 +36,19 @@ pub fn spawn(
         origin,
         vec3(tuning::FIREBALL_SCALE, tuning::FIREBALL_SCALE, 1.0),
     );
-    brimstone_world.resources.projectiles.items.push(Projectile {
-        entity,
-        position: origin,
-        velocity,
-        lifetime: tuning::FIREBALL_LIFETIME,
-        damage,
-        hostile: true,
-        splash_radius: 0.0,
-    });
+    brimstone_world
+        .resources
+        .projectiles
+        .items
+        .push(Projectile {
+            entity,
+            position: origin,
+            velocity,
+            lifetime: tuning::FIREBALL_LIFETIME,
+            damage,
+            hostile: true,
+            splash_radius: 0.0,
+        });
 }
 
 pub fn spawn_rocket(
@@ -64,15 +68,19 @@ pub fn spawn_rocket(
         origin,
         vec3(tuning::ROCKET_SCALE, tuning::ROCKET_SCALE, 1.0),
     );
-    brimstone_world.resources.projectiles.items.push(Projectile {
-        entity,
-        position: origin,
-        velocity,
-        lifetime: tuning::ROCKET_LIFETIME,
-        damage: tuning::ROCKET_DAMAGE,
-        hostile: false,
-        splash_radius: tuning::ROCKET_SPLASH_RADIUS,
-    });
+    brimstone_world
+        .resources
+        .projectiles
+        .items
+        .push(Projectile {
+            entity,
+            position: origin,
+            velocity,
+            lifetime: tuning::ROCKET_LIFETIME,
+            damage: tuning::ROCKET_DAMAGE,
+            hostile: false,
+            splash_radius: tuning::ROCKET_SPLASH_RADIUS,
+        });
 }
 
 pub fn update(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
@@ -126,14 +134,21 @@ pub fn update(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
                 return false;
             }
         } else {
+            let mut nearest: Option<(Entity, f32)> = None;
             for (enemy_entity, center, radius) in &enemy_targets {
                 if let Some(distance) = ray_sphere(start, direction, *center, *radius)
                     && distance <= step
+                    && nearest
+                        .map(|(_, current)| distance < current)
+                        .unwrap_or(true)
                 {
-                    let point = start + direction * distance;
-                    removed.push((item.entity, blast(point, Some(*enemy_entity), false)));
-                    return false;
+                    nearest = Some((*enemy_entity, distance));
                 }
+            }
+            if let Some((enemy_entity, distance)) = nearest {
+                let point = start + direction * distance;
+                removed.push((item.entity, blast(point, Some(enemy_entity), false)));
+                return false;
             }
         }
 
@@ -213,14 +228,26 @@ fn explode(brimstone_world: &mut BrimstoneWorld, world: &mut World, blast: &Blas
             offset = vec3(0.0, 1.0, 0.0);
         }
         let knockback = offset.normalize() * tuning::ROCKET_KNOCKBACK * falloff;
-        enemies::damage(brimstone_world, world, enemy_entity, damage, center, knockback);
+        enemies::damage(
+            brimstone_world,
+            world,
+            enemy_entity,
+            damage,
+            center,
+            knockback,
+        );
     }
 
     rocket_jump(brimstone_world, world, blast.position, radius);
 }
 
 /// Catch yourself in the blast and ride it — the genre-defining rocket-jump.
-fn rocket_jump(brimstone_world: &mut BrimstoneWorld, world: &mut World, position: Vec3, radius: f32) {
+fn rocket_jump(
+    brimstone_world: &mut BrimstoneWorld,
+    world: &mut World,
+    position: Vec3,
+    radius: f32,
+) {
     let Some(player) = brimstone_world.resources.player.player_entity else {
         return;
     };

@@ -94,10 +94,17 @@ pub fn build(tree: &mut UiTreeBuilder) -> MissionSelectHandles {
 }
 
 pub fn handle_input(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
-    if !matches!(brimstone_world.resources.screen.current, Screen::MissionSelect) {
+    if !matches!(
+        brimstone_world.resources.screen.current,
+        Screen::MissionSelect
+    ) {
         return;
     }
-    let back = brimstone_world.resources.ui_handles.mission_select.back_button;
+    let back = brimstone_world
+        .resources
+        .ui_handles
+        .mission_select
+        .back_button;
     let mut selected = None;
     let mut clicked_back = false;
     for entity in ui_button_clicks(world) {

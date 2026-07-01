@@ -40,7 +40,12 @@ pub fn maybe_drop(brimstone_world: &mut BrimstoneWorld, world: &mut World, posit
     };
 
     if let Some(kind) = kind {
-        spawn_pickup(brimstone_world, world, kind, vec3(position.x, 0.0, position.z));
+        spawn_pickup(
+            brimstone_world,
+            world,
+            kind,
+            vec3(position.x, 0.0, position.z),
+        );
     }
 }
 
@@ -54,7 +59,12 @@ pub fn spawn_keycard(brimstone_world: &mut BrimstoneWorld, world: &mut World, po
     );
 }
 
-fn spawn_pickup(brimstone_world: &mut BrimstoneWorld, world: &mut World, kind: PickupKind, ground: Vec3) {
+fn spawn_pickup(
+    brimstone_world: &mut BrimstoneWorld,
+    world: &mut World,
+    kind: PickupKind,
+    ground: Vec3,
+) {
     let material = match kind {
         PickupKind::Health => MAT_MEDKIT,
         PickupKind::Ammo => MAT_AMMO,
@@ -126,8 +136,9 @@ pub fn update(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
         match kind {
             PickupKind::Health => {
                 let max = brimstone_world.resources.stats.max_health;
-                brimstone_world.resources.stats.health =
-                    (brimstone_world.resources.stats.health + tuning::HEALTH_PICKUP_AMOUNT).min(max);
+                brimstone_world.resources.stats.health = (brimstone_world.resources.stats.health
+                    + tuning::HEALTH_PICKUP_AMOUNT)
+                    .min(max);
             }
             PickupKind::Ammo => {
                 let weapon = &mut brimstone_world.resources.weapon;

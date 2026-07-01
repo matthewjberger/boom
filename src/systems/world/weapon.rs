@@ -142,7 +142,8 @@ pub fn update(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     brimstone_world.resources.weapon.recoil = 1.0;
     brimstone_world.resources.game.shake += stats.shake;
     brimstone_world.resources.game.cam_kick += stats.kick;
-    brimstone_world.resources.game.fov_pop = brimstone_world.resources.game.fov_pop.max(stats.fov_pop);
+    brimstone_world.resources.game.fov_pop =
+        brimstone_world.resources.game.fov_pop.max(stats.fov_pop);
     let (sound, sound_volume) = match kind {
         WeaponKind::Shotgun => (audio::SHOTGUN, 0.9),
         WeaponKind::Nailgun => (audio::NAILGUN, 0.4),
@@ -458,7 +459,10 @@ fn auto_equip_sidearm(weapon: &mut WeaponState) {
     }
 }
 
-fn camera_frame(brimstone_world: &BrimstoneWorld, world: &World) -> Option<(Vec3, Vec3, Vec3, Vec3)> {
+fn camera_frame(
+    brimstone_world: &BrimstoneWorld,
+    world: &World,
+) -> Option<(Vec3, Vec3, Vec3, Vec3)> {
     let camera = brimstone_world.resources.player.camera_entity?;
     let transform = world.core.get_global_transform(camera)?;
     Some((
