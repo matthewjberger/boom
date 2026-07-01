@@ -124,6 +124,20 @@ Each phase ends at a committable, runnable state. Engine (nightshade) vs game (b
 
 **Phase 6 — Polish:** LOD fade tuning, occlusion/draw-distance/memory budgets, per-biome audio ambience.
 
+## Status — 2026-07-01
+
+Done and verified via the `BRIMSTONE_SHOT` harness (native), wasm build kept green:
+- **Phase 0**: brimstone builds against local `../nightshade` (path dep) with the `terrain` feature.
+- **Phase 1**: adventure hub (Rivermoor) is the streamed clipmap **terrain** overworld — rolling hills, snow peaks, far fog, no walls. GPU **grass** meadow. Deterministic per-chunk instanced **scatter** (conifer + broadleaf trees, rocks, bushes) seated on the terrain, biome-varied, streamed with a per-frame budget. The physics character controller walks the hills unchanged.
+- **Phase 2**: eight **dungeon-entrance POI** landmark spires scattered across the world, seated on terrain once its height streams in, entered via the existing portal→arena-cell flow. Bounded arena cells (wilds/hollow) hold the dense navmesh combat.
+- **Hub town**: Rivermoor rebuilt as a walkable **village** — houses with lit windows around a plaza obelisk; NPCs, merchant, quests, and the south gate intact.
+
+Verified in first person: the player spawns at the edge of the village, on the ground, weapon out, facing in, with a dungeon spire visible across the field.
+
+Not yet done (need live playtest or are larger efforts): overworld ambient combat + tiled navmesh (Phase 4), engine packaging of the streamer (Phase 3), and the broader RPG systems (Phase 5). Combat/movement/POI-entry reuse already-shipped code paths but have not been play-tested in the overworld.
+
+Note: the path dependency on `../nightshade` means CI/clones need nightshade as a sibling checkout; commits are local this session (not pushed) pending that decision.
+
 ## Risks & mitigations
 
 - **Exterior navmesh** (biggest gap) → cell-based combat first, tiled navmesh in Phase 4.
