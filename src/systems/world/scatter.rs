@@ -149,12 +149,13 @@ fn generate_chunk(world: &mut World, coord: (i32, i32)) -> Vec<Entity> {
 }
 
 fn add_tree(batch: &mut InstanceBatch, rng: &mut ChunkRng, base: Vec3) {
-    let trunk_height = rng.range(3.6, 7.2);
-    let trunk_radius = rng.range(0.28, 0.46);
+    let conifer = rng.f01() < 0.6;
+    let trunk_height = rng.range(2.4, 5.2);
+    let trunk_radius = rng.range(0.5, 0.8);
     let yaw = rng.range(0.0, TAU);
     let rotation = quat_angle_axis(yaw, &vec3(0.0, 1.0, 0.0));
     batch.push(
-        "Cube",
+        "Cylinder",
         MAT_TRUNK,
         InstanceTransform::new(
             base + vec3(0.0, trunk_height * 0.5, 0.0),
@@ -162,22 +163,41 @@ fn add_tree(batch: &mut InstanceBatch, rng: &mut ChunkRng, base: Vec3) {
             vec3(trunk_radius, trunk_height, trunk_radius),
         ),
     );
-    let canopy_radius = rng.range(2.0, 3.4);
-    let canopy_height = rng.range(2.8, 4.6);
     let foliage = if rng.f01() < 0.22 {
         MAT_FOLIAGE_WARM
     } else {
         MAT_FOLIAGE
     };
-    batch.push(
-        "Sphere",
-        foliage,
-        InstanceTransform::new(
-            base + vec3(0.0, trunk_height + canopy_height * 0.3, 0.0),
-            rotation,
-            vec3(canopy_radius, canopy_height, canopy_radius),
-        ),
-    );
+    if conifer {
+        let base_radius = rng.range(3.2, 4.8);
+        let tier_height = rng.range(2.2, 3.0);
+        let mut y = trunk_height * 0.75;
+        for tier in 0..3 {
+            let radius = base_radius * (1.0 - tier as f32 * 0.24);
+            batch.push(
+                "Cone",
+                foliage,
+                InstanceTransform::new(
+                    base + vec3(0.0, y + tier_height * 0.5, 0.0),
+                    rotation,
+                    vec3(radius, tier_height, radius),
+                ),
+            );
+            y += tier_height * 0.6;
+        }
+    } else {
+        let canopy_radius = rng.range(2.2, 3.4);
+        let canopy_height = rng.range(2.8, 4.2);
+        batch.push(
+            "Sphere",
+            foliage,
+            InstanceTransform::new(
+                base + vec3(0.0, trunk_height + canopy_height * 0.3, 0.0),
+                rotation,
+                vec3(canopy_radius, canopy_height, canopy_radius),
+            ),
+        );
+    }
 }
 
 fn add_rock(batch: &mut InstanceBatch, rng: &mut ChunkRng, base: Vec3) {
