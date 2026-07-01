@@ -155,7 +155,7 @@ pub fn build(tree: &mut UiTreeBuilder) -> HudHandles {
         let info_chip = panel(
             tree,
             Ab(vec2(24.0, 20.0)),
-            Ab(vec2(300.0, 62.0)),
+            Ab(vec2(344.0, 62.0)),
             Anchor::TopLeft,
             PANEL_BG_DEEP,
             true,
@@ -163,14 +163,14 @@ pub fn build(tree: &mut UiTreeBuilder) -> HudHandles {
         tree.in_parent(info_chip, |tree| {
             wave_label = tree
                 .add_node()
-                .window(Ab(vec2(14.0, 9.0)), Ab(vec2(272.0, 22.0)), Anchor::TopLeft)
-                .with_text("WAVE 1", 20.0)
+                .window(Ab(vec2(14.0, 9.0)), Ab(vec2(316.0, 22.0)), Anchor::TopLeft)
+                .with_text("WAVE 1", 18.0)
                 .text_left()
                 .color_raw::<UiBase>(ACCENT)
                 .entity();
             objective_label = tree
                 .add_node()
-                .window(Ab(vec2(14.0, 36.0)), Ab(vec2(272.0, 18.0)), Anchor::TopLeft)
+                .window(Ab(vec2(14.0, 36.0)), Ab(vec2(316.0, 18.0)), Anchor::TopLeft)
                 .with_text("", 15.0)
                 .text_left()
                 .with_visible(false)
@@ -314,13 +314,7 @@ pub fn update(cobalt_world: &CobaltWorld, world: &mut World) {
     ui_set_text(
         world,
         hud.wave_label,
-        &format!(
-            "LEVEL {}: {}   WAVE {}/{}",
-            level.index + 1,
-            level_name,
-            level.wave,
-            level.wave_count
-        ),
+        &format!("{}   WAVE {}/{}", level_name, level.wave, level.wave_count),
     );
 
     let show_objective = playing && level.story;
