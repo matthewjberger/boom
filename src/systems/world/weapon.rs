@@ -77,6 +77,17 @@ fn weapon_stats(kind: WeaponKind) -> WeaponStats {
             fov_pop: tuning::PISTOL_FOV_POP,
             tracer: vec4(2.2, 1.9, 1.4, 1.0),
         },
+        WeaponKind::Tesla => WeaponStats {
+            pellets: 0,
+            spread: 0.0,
+            damage: tuning::TESLA_DAMAGE,
+            cooldown: tuning::TESLA_COOLDOWN,
+            knockback: tuning::TESLA_KNOCKBACK,
+            shake: tuning::TESLA_SHAKE,
+            kick: tuning::TESLA_KICK,
+            fov_pop: tuning::TESLA_FOV_POP,
+            tracer: vec4(0.6, 1.1, 2.8, 1.0),
+        },
     }
 }
 
@@ -131,6 +142,7 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
         WeaponKind::Rocket => (audio::ROCKET, 0.85),
         WeaponKind::Railgun => (audio::RAILGUN, 0.8),
         WeaponKind::Pistol => (audio::NAILGUN, 0.5),
+        WeaponKind::Tesla => (audio::RAILGUN, 0.7),
     };
     audio::play(cobalt_world, world, sound, sound_volume);
 
@@ -148,6 +160,11 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
 
     if matches!(kind, WeaponKind::Rocket) {
         projectiles::spawn_rocket(cobalt_world, world, muzzle, forward);
+        return;
+    }
+
+    if matches!(kind, WeaponKind::Tesla) {
+        tesla_fire(cobalt_world, world, origin, forward, muzzle, stats.damage);
         return;
     }
 
@@ -286,6 +303,83 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
     }
 }
 
+/// Tesla cannon: an arc leaps to the nearest enemy ahead, then chains to the
+/// nearest enemies within range, damaging every link. All targets take full
+/// damage; the visual arc is drawn muzzle -> first -> next -> ...
+fn tesla_fire(
+    cobalt_world: &mut CobaltWorld,
+    world: &mut World,
+    origin: Vec3,
+    forward: Vec3,
+    muzzle: Vec3,
+    damage: f32,
+) {
+    let targets: Vec<(Entity, Vec3)> = cobalt_world
+        .query_entities(ENEMY)
+        .filter_map(|game_entity| {
+            let enemy = cobalt_world.get_enemy(game_entity)?;
+            if enemy.state == EnemyState::Dying {
+                None
+            } else {
+                Some((game_entity, enemies::center(enemy)))
+            }
+        })
+        .collect();
+
+    let color = vec3(0.55, 1.0, 2.8);
+    let primary = targets
+        .iter()
+        .copied()
+        .filter(|(_, point)| {
+            let to_target = point - origin;
+            let distance = to_target.norm();
+            distance > 0.1
+                && distance < tuning::TESLA_RANGE
+                && dot(&(to_target / distance), &forward) > 0.45
+        })
+        .min_by(|a, b| (a.1 - origin).norm().total_cmp(&(b.1 - origin).norm()));
+    let Some(primary) = primary else {
+        fx::lightning(cobalt_world, world, muzzle, muzzle + forward * 7.0, color);
+        return;
+    };
+
+    let mut hits: Vec<(Entity, Vec3)> = vec![primary];
+    let mut current = primary.1;
+    while hits.len() <= tuning::TESLA_CHAINS {
+        let next = targets
+            .iter()
+            .copied()
+            .filter(|(entity, _)| !hits.iter().any(|(hit, _)| hit == entity))
+            .filter(|(_, point)| (point - current).norm() < tuning::TESLA_CHAIN_RANGE)
+            .min_by(|a, b| (a.1 - current).norm().total_cmp(&(b.1 - current).norm()));
+        let Some(next) = next else { break };
+        hits.push(next);
+        current = next.1;
+    }
+
+    let mut from = muzzle;
+    for (_, point) in &hits {
+        fx::lightning(cobalt_world, world, from, *point, color);
+        from = *point;
+    }
+    for (entity, point) in hits {
+        enemies::damage(
+            cobalt_world,
+            world,
+            entity,
+            damage,
+            point,
+            forward * tuning::TESLA_KNOCKBACK,
+        );
+    }
+    cobalt_world.resources.weapon.hit_marker = 0.12;
+    cobalt_world.resources.game.hitstop = cobalt_world
+        .resources
+        .game
+        .hitstop
+        .max(tuning::TESLA_HITSTOP);
+}
+
 fn switch_weapons(cobalt_world: &mut CobaltWorld, world: &World) {
     let keyboard = &world.resources.input.keyboard;
     let direct = [
@@ -294,6 +388,7 @@ fn switch_weapons(cobalt_world: &mut CobaltWorld, world: &World) {
         (KeyCode::Digit3, WeaponKind::Rocket),
         (KeyCode::Digit4, WeaponKind::Railgun),
         (KeyCode::Digit5, WeaponKind::Pistol),
+        (KeyCode::Digit6, WeaponKind::Tesla),
     ];
     for (key, weapon) in direct {
         if keyboard.just_pressed(key) {

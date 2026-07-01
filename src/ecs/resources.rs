@@ -160,6 +160,8 @@ pub enum WeaponKind {
     /// through every other pool can never soft-lock — they switch to this and
     /// keep fighting, while its low damage keeps the real guns worth chasing.
     Pistol,
+    /// Tesla cannon: a chain-lightning arc that leaps between nearby enemies.
+    Tesla,
 }
 
 /// Per-weapon ammo economy: starting reserve, hard cap, and refill per pickup.
@@ -172,12 +174,13 @@ struct AmmoSpec {
 impl WeaponKind {
     /// Every weapon in slot order. Indexing it is the canonical weapon→slot map
     /// (see [`WeaponKind::index`]); iterate it to touch each weapon's ammo pool.
-    pub const ALL: [WeaponKind; 5] = [
+    pub const ALL: [WeaponKind; 6] = [
         WeaponKind::Shotgun,
         WeaponKind::Nailgun,
         WeaponKind::Rocket,
         WeaponKind::Railgun,
         WeaponKind::Pistol,
+        WeaponKind::Tesla,
     ];
 
     pub fn name(self) -> &'static str {
@@ -187,6 +190,7 @@ impl WeaponKind {
             WeaponKind::Rocket => "ROCKET",
             WeaponKind::Railgun => "RAILGUN",
             WeaponKind::Pistol => "PISTOL",
+            WeaponKind::Tesla => "TESLA",
         }
     }
 
@@ -227,6 +231,11 @@ impl WeaponKind {
                 start: 0,
                 max: 0,
                 pickup: 0,
+            },
+            WeaponKind::Tesla => AmmoSpec {
+                start: tuning::TESLA_START,
+                max: tuning::TESLA_MAX,
+                pickup: tuning::TESLA_PICKUP,
             },
         }
     }

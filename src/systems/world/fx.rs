@@ -183,6 +183,46 @@ pub fn tracer(
     track(cobalt_world, entity, TRACER_TTL);
 }
 
+/// A short-lived procedural lightning arc between two points (the tesla cannon).
+/// The engine's vfx system regenerates its jagged path into the entity's lines
+/// each frame; we just despawn it after a brief life.
+pub fn lightning(
+    cobalt_world: &mut CobaltWorld,
+    world: &mut World,
+    start: Vec3,
+    end: Vec3,
+    color: Vec3,
+) {
+    let entity = spawn_entities(
+        world,
+        NAME | LINES | LIGHTNING_BOLT | VISIBILITY | GLOBAL_TRANSFORM,
+        1,
+    )[0];
+    world.core.set_lines(entity, Lines::new(Vec::new()));
+    world
+        .core
+        .set_visibility(entity, Visibility { visible: true });
+    world
+        .core
+        .set_global_transform(entity, GlobalTransform::default());
+    world.core.set_lightning_bolt(
+        entity,
+        LightningBolt {
+            start,
+            end,
+            color,
+            intensity: 6.0,
+            jaggedness: 0.55,
+            branch_count: 3,
+            branch_spread: 0.7,
+            regen_interval: 0.025,
+            seed: entity.id as u32,
+            ..Default::default()
+        },
+    );
+    track(cobalt_world, entity, 0.16);
+}
+
 pub fn tick(cobalt_world: &mut CobaltWorld, world: &mut World) {
     let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
     let mut index = 0;

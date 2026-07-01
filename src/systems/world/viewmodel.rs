@@ -114,7 +114,7 @@ fn model(index: usize) -> Vec<Part> {
             ),
         ],
         // Pistol: slide, short barrel, angled grip.
-        _ => vec![
+        4 => vec![
             matte(vec3(0.0, 0.0, -0.02), vec3(0.05, 0.06, 0.2), DARK),
             matte(vec3(0.0, 0.01, -0.16), vec3(0.03, 0.035, 0.08), METAL),
             matte(vec3(0.0, -0.09, 0.05), vec3(0.05, 0.13, 0.055), GRIP),
@@ -122,6 +122,27 @@ fn model(index: usize) -> Vec<Part> {
                 vec3(0.0, 0.04, -0.14),
                 vec3(0.02, 0.02, 0.03),
                 [0.95, 0.82, 0.35],
+            ),
+        ],
+        // Tesla cannon: coil body, prongs, and a glowing arc emitter.
+        _ => vec![
+            matte(vec3(0.0, 0.0, -0.02), vec3(0.08, 0.09, 0.22), METAL),
+            matte(vec3(0.0, 0.02, -0.2), vec3(0.05, 0.05, 0.1), DARK),
+            matte(vec3(0.0, -0.11, 0.07), vec3(0.05, 0.11, 0.05), GRIP),
+            glow(
+                vec3(0.0, 0.06, -0.05),
+                vec3(0.09, 0.02, 0.14),
+                [0.45, 0.85, 2.6],
+            ),
+            glow(
+                vec3(0.03, 0.03, -0.28),
+                vec3(0.02, 0.02, 0.06),
+                [0.5, 0.95, 2.8],
+            ),
+            glow(
+                vec3(-0.03, 0.03, -0.28),
+                vec3(0.02, 0.02, 0.06),
+                [0.5, 0.95, 2.8],
             ),
         ],
     }
@@ -153,7 +174,9 @@ pub fn spawn(cobalt_world: &mut CobaltWorld, world: &mut World) {
     world.resources.transform_state.children_cache_valid = false;
     mark_local_transform_dirty(world, root);
 
-    let models: Vec<Vec<Entity>> = (0..5).map(|index| build(world, root, index)).collect();
+    let models: Vec<Vec<Entity>> = (0..crate::ecs::WeaponKind::ALL.len())
+        .map(|index| build(world, root, index))
+        .collect();
     for group in &models {
         for entity in group {
             world

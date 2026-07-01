@@ -467,12 +467,13 @@ fn weapon_rack(weapon: &WeaponState) -> String {
         }
     };
     format!(
-        "{}  {}  {}  {}  {}",
+        "{}  {}  {}  {}  {}  {}",
         segment(WeaponKind::Shotgun, "1 SG"),
         segment(WeaponKind::Nailgun, "2 NG"),
         segment(WeaponKind::Rocket, "3 RK"),
         segment(WeaponKind::Railgun, "4 RG"),
         segment(WeaponKind::Pistol, "5 PS"),
+        segment(WeaponKind::Tesla, "6 TS"),
     )
 }
 
