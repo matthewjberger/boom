@@ -71,11 +71,15 @@ pub fn update(world: &mut World, center: Vec3) {
     }
 }
 
-/// Turn the terrain off when leaving the overworld for a bounded cell or the title.
+/// Turn the terrain and grass off when leaving the overworld for a bounded cell
+/// or the title. The revision bump plus one more `terrain_collider_system` call
+/// despawns the streamed heightfield colliders (its revision-change cleanup runs
+/// before the disabled early-return), so they never leak into a combat cell.
 pub fn leave(world: &mut World) {
     if world.resources.terrain.enabled {
         world.resources.terrain.enabled = false;
         world.resources.terrain.revision += 1;
+        terrain_collider_system(world, Vec3::zeros());
     }
     world.resources.grass.enabled = false;
 }
