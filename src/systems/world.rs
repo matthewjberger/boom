@@ -4,6 +4,7 @@ pub mod enemies;
 pub mod fx;
 pub mod game;
 pub mod level;
+pub mod overworld;
 pub mod pickups;
 pub mod player;
 pub mod projectiles;

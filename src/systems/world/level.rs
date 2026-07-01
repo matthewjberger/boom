@@ -144,6 +144,24 @@ pub fn build_arena(
     geometry
 }
 
+/// Spawn the given solid blocks as free-standing props (no perimeter shell,
+/// navmesh, or fill lighting) for the open-world overworld, where the streamed
+/// terrain is the ground rather than a flat floor. Returns them for teardown.
+pub fn spawn_props(world: &mut World, blocks: &[BlockSpec]) -> Vec<Entity> {
+    blocks
+        .iter()
+        .map(|(cx, cy, cz, sx, sy, sz, kind)| {
+            spawn_block(
+                world,
+                "Block",
+                vec3(*cx, *cy, *cz),
+                vec3(*sx, *sy, *sz),
+                material_for(*kind),
+            )
+        })
+        .collect()
+}
+
 /// A coloured point light at `position` for adventure-mode accent lighting.
 pub fn spawn_accent_light(world: &mut World, position: Vec3, color: Vec3) -> Entity {
     spawn_lamp(world, position, color, 11.0, 14.0)

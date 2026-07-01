@@ -21,7 +21,7 @@ use crate::systems::world::textures::{
     MAT_EXIT, MAT_NPC_ELDER, MAT_NPC_GUARD, MAT_NPC_MERCHANT, MAT_NPC_VILLAGER,
 };
 use crate::systems::world::{
-    audio, billboard, enemies, fx, game, level, pickups, player, projectiles, weapon,
+    audio, billboard, enemies, fx, game, level, overworld, pickups, player, projectiles, weapon,
 };
 use nalgebra_glm::{Vec3, vec3};
 use nightshade::ecs::camera::systems::first_person_camera_look_system;
@@ -172,6 +172,9 @@ struct AreaDef {
     enemies: &'static [EnemyKind],
     enemy_cap: usize,
     elite: bool,
+    /// When true this area is the streamed open-world overworld (terrain, no walls)
+    /// rather than a bounded arena cell.
+    overworld: bool,
 }
 
 const AREA_TOWN: usize = 0;
@@ -252,7 +255,7 @@ const AREAS: &[AreaDef] = &[
         fog: [0.10, 0.07, 0.05],
         half_x: 42.0,
         half_z: 42.0,
-        spawn: [0.0, 1.2, 30.0],
+        spawn: [0.0, 3.0, 30.0],
         blocks: TOWN_BLOCKS,
         lights: TOWN_LIGHTS,
         npcs: TOWN_NPCS,
@@ -260,6 +263,7 @@ const AREAS: &[AreaDef] = &[
         enemies: &[],
         enemy_cap: 0,
         elite: false,
+        overworld: true,
     },
     AreaDef {
         name: "THE MISTFEN",
@@ -275,6 +279,7 @@ const AREAS: &[AreaDef] = &[
         enemies: WILDS_ENEMIES,
         enemy_cap: 8,
         elite: false,
+        overworld: false,
     },
     AreaDef {
         name: "EMBER HOLLOW",
@@ -290,6 +295,7 @@ const AREAS: &[AreaDef] = &[
         enemies: HOLLOW_ENEMIES,
         enemy_cap: 7,
         elite: true,
+        overworld: false,
     },
 ];
 
@@ -326,6 +332,7 @@ pub fn open(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
 /// the other modes are ready again.
 pub fn leave(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     teardown(brimstone_world, world);
+    overworld::leave(world);
     brimstone_world.resources.adventure.active = false;
     game::start_at(brimstone_world, world, 0);
     lifecycle::enter(brimstone_world, world, Screen::Title);
@@ -350,7 +357,16 @@ fn load_area(brimstone_world: &mut BrimstoneWorld, world: &mut World, area_index
     let area = &AREAS[area_index];
 
     level::apply_environment(world, area.atmosphere, area.fog);
-    let mut geometry = level::build_arena(world, area.blocks, area.half_x, area.half_z);
+    let mut geometry = if area.overworld {
+        overworld::enter(
+            world,
+            area.blocks,
+            vec3(area.spawn[0], area.spawn[1], area.spawn[2]),
+        )
+    } else {
+        overworld::leave(world);
+        level::build_arena(world, area.blocks, area.half_x, area.half_z)
+    };
     for (x, z, color) in area.lights {
         geometry.push(level::spawn_accent_light(
             world,
@@ -463,6 +479,10 @@ fn maybe_spawn_boss(brimstone_world: &mut BrimstoneWorld, world: &mut World, are
 pub fn update(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     if !matches!(brimstone_world.resources.screen.current, Screen::Adventure) {
         return;
+    }
+    if AREAS[brimstone_world.resources.adventure.area].overworld {
+        let center = player::position(brimstone_world, world);
+        overworld::update(world, center);
     }
     let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
     tick_timers(brimstone_world, delta);
