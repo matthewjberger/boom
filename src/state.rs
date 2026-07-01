@@ -110,7 +110,7 @@ struct DevShot {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl DevShot {
-    const WARMUP_FRAMES: u32 = 150;
+    const WARMUP_FRAMES: u32 = 230;
     const FRAMES_PER_POSE: u32 = 14;
     const CAPTURE_AT: u32 = 6;
 
@@ -122,7 +122,7 @@ impl DevShot {
                 (Vec3::new(0.0, 78.0, 165.0), -0.42, 0.0),
                 (Vec3::new(0.0, 230.0, 30.0), -1.45, 0.0),
                 (Vec3::new(180.0, 70.0, 180.0), -0.35, -0.785),
-                (Vec3::new(0.0, 30.0, -140.0), -0.12, std::f32::consts::PI),
+                (Vec3::new(200.0, 48.0, 210.0), -0.2, 0.0),
             ],
             output_dir: std::env::var("BRIMSTONE_SHOT_DIR").unwrap_or_else(|_| ".".to_string()),
             warmup: Self::WARMUP_FRAMES,

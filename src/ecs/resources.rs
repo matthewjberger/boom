@@ -513,6 +513,9 @@ pub struct AdventureState {
     pub rng: u64,
     /// Streamed natural scatter (trees, rocks, bushes) for the open-world overworld.
     pub scatter: crate::systems::world::scatter::ScatterState,
+    /// Overworld dungeon-entrance portals waiting for the terrain under them to
+    /// stream in before they can be seated on the ground: (x, z, target area, label).
+    pub pending_portals: Vec<(f32, f32, usize, String)>,
 }
 
 impl AdventureState {

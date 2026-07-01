@@ -242,6 +242,17 @@ const HOLLOW_BLOCKS: &[BlockSpec] = &[
 const HOLLOW_LIGHTS: &[(f32, f32, [f32; 3])] =
     &[(0.0, 0.0, [2.0, 0.7, 0.25]), (0.0, 24.0, [0.4, 1.2, 0.7])];
 const HOLLOW_PORTALS: &[PortalSpec] = &[(0.0, 26.0, AREA_WILDS, "the Mistfen")];
+
+/// Dungeon entrances scattered across the overworld terrain around town, each a
+/// gate into a bounded arena cell. Seated on the ground once the terrain beneath
+/// them streams in. (x, z, target area, label).
+const OVERWORLD_POIS: &[PortalSpec] = &[
+    (200.0, 120.0, AREA_WILDS, "the Mistfen"),
+    (-180.0, 150.0, AREA_HOLLOW, "Ember Hollow"),
+    (40.0, 240.0, AREA_WILDS, "the Fen Ruin"),
+    (-150.0, -190.0, AREA_HOLLOW, "the Sunken Barrow"),
+    (230.0, -110.0, AREA_WILDS, "the Reedmire"),
+];
 const HOLLOW_ENEMIES: &[EnemyKind] = &[
     EnemyKind::Brute,
     EnemyKind::Caster,
@@ -352,6 +363,7 @@ fn teardown(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
     for entity in geometry {
         despawn_recursive_immediate(world, entity);
     }
+    brimstone_world.resources.adventure.pending_portals.clear();
 }
 
 fn load_area(brimstone_world: &mut BrimstoneWorld, world: &mut World, area_index: usize) {
@@ -395,27 +407,36 @@ fn load_area(brimstone_world: &mut BrimstoneWorld, world: &mut World, area_index
 
     let portal_color = vec3(0.3, 1.7, 0.7);
     let mut portals: Vec<AdventurePortal> = Vec::new();
-    for (x, z, target, label) in area.portals {
-        let position = vec3(*x, 0.0, *z);
-        // A real stretched cube, not a billboard, so the gate stays solid from
-        // every side, with a light and a column of rising embers for presence.
-        geometry.push(level::spawn_marker(
-            world,
-            vec3(*x, 2.4, *z),
-            vec3(2.8, 4.8, 2.8),
-            MAT_EXIT,
-        ));
-        geometry.push(level::spawn_accent_light(
-            world,
-            vec3(*x, 2.6, *z),
-            portal_color,
-        ));
-        geometry.push(level::spawn_embers(world, vec3(*x, 0.3, *z), portal_color));
-        portals.push(AdventurePortal {
-            position,
-            target_area: *target,
-            label: label.to_string(),
-        });
+    let mut pending_portals: Vec<(f32, f32, usize, String)> = Vec::new();
+    if area.overworld {
+        // Seat portals on the streamed terrain lazily, once each one's ground
+        // height is known (see `spawn_ready_portals`).
+        for (x, z, target, label) in area.portals.iter().chain(OVERWORLD_POIS) {
+            pending_portals.push((*x, *z, *target, label.to_string()));
+        }
+    } else {
+        for (x, z, target, label) in area.portals {
+            let position = vec3(*x, 0.0, *z);
+            // A real stretched cube, not a billboard, so the gate stays solid from
+            // every side, with a light and a column of rising embers for presence.
+            geometry.push(level::spawn_marker(
+                world,
+                vec3(*x, 2.4, *z),
+                vec3(2.8, 4.8, 2.8),
+                MAT_EXIT,
+            ));
+            geometry.push(level::spawn_accent_light(
+                world,
+                vec3(*x, 2.6, *z),
+                portal_color,
+            ));
+            geometry.push(level::spawn_embers(world, vec3(*x, 0.3, *z), portal_color));
+            portals.push(AdventurePortal {
+                position,
+                target_area: *target,
+                label: label.to_string(),
+            });
+        }
     }
 
     let spawn = vec3(area.spawn[0], area.spawn[1], area.spawn[2]);
@@ -425,6 +446,7 @@ fn load_area(brimstone_world: &mut BrimstoneWorld, world: &mut World, area_index
     adventure.area = area_index;
     adventure.npcs = npcs;
     adventure.portals = portals;
+    adventure.pending_portals = pending_portals;
     adventure.geometry = geometry;
     adventure.spawn_point = spawn;
     adventure.banner = 3.0;
@@ -440,6 +462,46 @@ fn load_area(brimstone_world: &mut BrimstoneWorld, world: &mut World, area_index
         }
     }
     maybe_spawn_boss(brimstone_world, world, area_index);
+}
+
+/// Seat any overworld portal whose terrain has streamed in: place its gate,
+/// light, and embers on the ground and register it for interaction. Pending
+/// entries whose ground is not known yet are retried on later frames.
+fn spawn_ready_portals(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
+    if brimstone_world
+        .resources
+        .adventure
+        .pending_portals
+        .is_empty()
+    {
+        return;
+    }
+    let portal_color = vec3(0.3, 1.7, 0.7);
+    let mut pending = std::mem::take(&mut brimstone_world.resources.adventure.pending_portals);
+    pending.retain(|(x, z, target, label)| {
+        let Some(ground) = world.resources.terrain_render.sample_height(*x, *z) else {
+            return true;
+        };
+        let marker = level::spawn_marker(
+            world,
+            vec3(*x, ground + 3.2, *z),
+            vec3(3.2, 7.0, 3.2),
+            MAT_EXIT,
+        );
+        let light = level::spawn_accent_light(world, vec3(*x, ground + 3.4, *z), portal_color);
+        let embers = level::spawn_embers(world, vec3(*x, ground + 0.3, *z), portal_color);
+        let adventure = &mut brimstone_world.resources.adventure;
+        adventure.geometry.push(marker);
+        adventure.geometry.push(light);
+        adventure.geometry.push(embers);
+        adventure.portals.push(AdventurePortal {
+            position: vec3(*x, ground, *z),
+            target_area: *target,
+            label: label.clone(),
+        });
+        false
+    });
+    brimstone_world.resources.adventure.pending_portals = pending;
 }
 
 /// Spawn the area's warlord set-piece if a boss objective for it is active.
@@ -490,6 +552,7 @@ pub fn update(brimstone_world: &mut BrimstoneWorld, world: &mut World) {
             world,
             center,
         );
+        spawn_ready_portals(brimstone_world, world);
     }
     let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
     tick_timers(brimstone_world, delta);
