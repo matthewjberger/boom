@@ -264,6 +264,8 @@ pub struct WeaponState {
     pub hit_marker: f32,
     /// Decaying [0,1] kick set on every shot; drives the viewmodel recoil.
     pub recoil: f32,
+    /// Countdown between the tesla beam's damage/ammo ticks while it's held.
+    pub tesla_tick: f32,
 }
 
 impl WeaponState {
@@ -290,6 +292,7 @@ impl Default for WeaponState {
             cooldown: 0.0,
             hit_marker: 0.0,
             recoil: 0.0,
+            tesla_tick: 0.0,
         }
     }
 }

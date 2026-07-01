@@ -192,6 +192,7 @@ pub fn lightning(
     start: Vec3,
     end: Vec3,
     color: Vec3,
+    ttl: f32,
 ) {
     let entity = spawn_entities(
         world,
@@ -220,7 +221,7 @@ pub fn lightning(
             ..Default::default()
         },
     );
-    track(cobalt_world, entity, 0.16);
+    track(cobalt_world, entity, ttl);
 }
 
 pub fn tick(cobalt_world: &mut CobaltWorld, world: &mut World) {

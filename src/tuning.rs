@@ -107,22 +107,22 @@ pub const PISTOL_SHAKE: f32 = 0.05;
 pub const PISTOL_KICK: f32 = 0.12;
 pub const PISTOL_FOV_POP: f32 = 1.4;
 
-// Tesla cannon (chain lightning — an arc that leaps between nearby enemies)
-pub const TESLA_DAMAGE: f32 = 42.0;
-pub const TESLA_COOLDOWN: f32 = 0.5;
+// Tesla cannon (press-and-hold beam — a chain-lightning arc locked on the
+// nearest enemy ahead, damaging in rapid ticks while the trigger is held)
 pub const TESLA_RANGE: f32 = 24.0;
 /// Max distance the arc jumps from one enemy to the next.
 pub const TESLA_CHAIN_RANGE: f32 = 9.0;
 /// Additional enemies the arc leaps to after the first.
 pub const TESLA_CHAINS: usize = 4;
-pub const TESLA_KNOCKBACK: f32 = 5.0;
-pub const TESLA_SHAKE: f32 = 0.28;
-pub const TESLA_KICK: f32 = 0.32;
-pub const TESLA_FOV_POP: f32 = 5.0;
-pub const TESLA_HITSTOP: f32 = 0.04;
-pub const TESLA_START: u32 = 30;
-pub const TESLA_MAX: u32 = 90;
-pub const TESLA_PICKUP: u32 = 14;
+/// Seconds between the beam's damage/ammo ticks while held.
+pub const TESLA_TICK: f32 = 0.08;
+/// Damage dealt to every zapped enemy on each tick.
+pub const TESLA_TICK_DAMAGE: f32 = 9.0;
+pub const TESLA_KNOCKBACK: f32 = 1.2;
+pub const TESLA_SHAKE: f32 = 0.05;
+pub const TESLA_START: u32 = 60;
+pub const TESLA_MAX: u32 = 160;
+pub const TESLA_PICKUP: u32 = 30;
 
 // Railgun (piercing hitscan beam — punches through a whole line of enemies)
 pub const RAIL_DAMAGE: f32 = 85.0;

@@ -80,12 +80,12 @@ fn weapon_stats(kind: WeaponKind) -> WeaponStats {
         WeaponKind::Tesla => WeaponStats {
             pellets: 0,
             spread: 0.0,
-            damage: tuning::TESLA_DAMAGE,
-            cooldown: tuning::TESLA_COOLDOWN,
+            damage: tuning::TESLA_TICK_DAMAGE,
+            cooldown: tuning::TESLA_TICK,
             knockback: tuning::TESLA_KNOCKBACK,
             shake: tuning::TESLA_SHAKE,
-            kick: tuning::TESLA_KICK,
-            fov_pop: tuning::TESLA_FOV_POP,
+            kick: 0.0,
+            fov_pop: 0.0,
             tracer: vec4(0.6, 1.1, 2.8, 1.0),
         },
     }
@@ -113,6 +113,13 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
         .map(|gamepad| gamepad.is_pressed(gilrs::Button::RightTrigger2))
         .unwrap_or(false);
     let firing = mouse_fire || gamepad_fire;
+
+    // The tesla is a held beam, not a discrete shot: it runs its own logic every
+    // frame (to keep the arc alive and to stop it the instant you release).
+    if cobalt_world.resources.weapon.current == WeaponKind::Tesla {
+        tesla_beam(cobalt_world, world, firing);
+        return;
+    }
 
     if !firing || cobalt_world.resources.weapon.cooldown > 0.0 {
         return;
@@ -160,11 +167,6 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
 
     if matches!(kind, WeaponKind::Rocket) {
         projectiles::spawn_rocket(cobalt_world, world, muzzle, forward);
-        return;
-    }
-
-    if matches!(kind, WeaponKind::Tesla) {
-        tesla_fire(cobalt_world, world, origin, forward, muzzle, stats.damage);
         return;
     }
 
@@ -303,17 +305,33 @@ pub fn update(cobalt_world: &mut CobaltWorld, world: &mut World) {
     }
 }
 
-/// Tesla cannon: an arc leaps to the nearest enemy ahead, then chains to the
-/// nearest enemies within range, damaging every link. All targets take full
-/// damage; the visual arc is drawn muzzle -> first -> next -> ...
-fn tesla_fire(
-    cobalt_world: &mut CobaltWorld,
-    world: &mut World,
-    origin: Vec3,
-    forward: Vec3,
-    muzzle: Vec3,
-    damage: f32,
-) {
+/// Tesla cannon: a press-and-hold beam. While the trigger is held it locks a
+/// visible lightning arc onto the nearest enemy ahead and chains onward to the
+/// nearest few, redrawing the bolt every frame so it crackles continuously.
+/// Damage and ammo are spent in rapid ticks (not every frame) so hit feedback
+/// fires at a sane rate; releasing the trigger stops it instantly.
+fn tesla_beam(cobalt_world: &mut CobaltWorld, world: &mut World, firing: bool) {
+    let delta = world.resources.window.timing.delta_time.clamp(0.0, 0.1);
+    cobalt_world.resources.weapon.tesla_tick =
+        (cobalt_world.resources.weapon.tesla_tick - delta).max(0.0);
+
+    if !firing {
+        return;
+    }
+
+    if cobalt_world.resources.weapon.ammo(WeaponKind::Tesla) == 0 {
+        if cobalt_world.resources.weapon.tesla_tick <= 0.0 {
+            cobalt_world.resources.weapon.tesla_tick = 0.3;
+            audio::play(cobalt_world, world, audio::EMPTY, 0.4);
+        }
+        return;
+    }
+
+    let Some((origin, forward, _right, _up)) = camera_frame(cobalt_world, world) else {
+        return;
+    };
+    let muzzle = origin + forward * 0.6;
+
     let targets: Vec<(Entity, Vec3)> = cobalt_world
         .query_entities(ENEMY)
         .filter_map(|game_entity| {
@@ -326,7 +344,6 @@ fn tesla_fire(
         })
         .collect();
 
-    let color = vec3(0.55, 1.0, 2.8);
     let primary = targets
         .iter()
         .copied()
@@ -335,11 +352,10 @@ fn tesla_fire(
             let distance = to_target.norm();
             distance > 0.1
                 && distance < tuning::TESLA_RANGE
-                && dot(&(to_target / distance), &forward) > 0.45
+                && dot(&(to_target / distance), &forward) > 0.35
         })
         .min_by(|a, b| (a.1 - origin).norm().total_cmp(&(b.1 - origin).norm()));
     let Some(primary) = primary else {
-        fx::lightning(cobalt_world, world, muzzle, muzzle + forward * 7.0, color);
         return;
     };
 
@@ -357,27 +373,37 @@ fn tesla_fire(
         current = next.1;
     }
 
+    let color = vec3(0.55, 1.0, 2.8);
     let mut from = muzzle;
     for (_, point) in &hits {
-        fx::lightning(cobalt_world, world, from, *point, color);
+        fx::lightning(cobalt_world, world, from, *point, color, 0.06);
         from = *point;
     }
-    for (entity, point) in hits {
+    cobalt_world.resources.weapon.recoil = 0.35;
+
+    if cobalt_world.resources.weapon.tesla_tick > 0.0 {
+        return;
+    }
+    cobalt_world.resources.weapon.tesla_tick = tuning::TESLA_TICK;
+    let remaining = cobalt_world
+        .resources
+        .weapon
+        .ammo(WeaponKind::Tesla)
+        .saturating_sub(1);
+    *cobalt_world.resources.weapon.ammo_mut(WeaponKind::Tesla) = remaining;
+    for (entity, point) in &hits {
         enemies::damage(
             cobalt_world,
             world,
-            entity,
-            damage,
-            point,
+            *entity,
+            tuning::TESLA_TICK_DAMAGE,
+            *point,
             forward * tuning::TESLA_KNOCKBACK,
         );
     }
     cobalt_world.resources.weapon.hit_marker = 0.12;
-    cobalt_world.resources.game.hitstop = cobalt_world
-        .resources
-        .game
-        .hitstop
-        .max(tuning::TESLA_HITSTOP);
+    cobalt_world.resources.game.shake += tuning::TESLA_SHAKE;
+    audio::play(cobalt_world, world, audio::RAILGUN, 0.3);
 }
 
 fn switch_weapons(cobalt_world: &mut CobaltWorld, world: &World) {
